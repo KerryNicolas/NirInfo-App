@@ -273,10 +273,7 @@ export default function ProfilePage() {
                 placeholder="Votre mot de passe actuel"
               />
 
-              <div style={{
-                height: 1, background: '#f1f5f9',
-                margin: '4px 0 16px',
-              }} />
+              <div/>
 
               <PwdInput
                 label="Nouveau mot de passe"

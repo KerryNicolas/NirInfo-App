@@ -12,13 +12,13 @@ export default function EtudiantMain() {
   return (
     <div className="page-body">
       <div style={{ marginBottom: 20 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b' }}>Étudiant</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b' }}>Etudiant</h2>
         <div style={{ width: 40, height: 3, background: '#2563eb', borderRadius: 2, marginTop: 4 }} />
       </div>
 
       <div className="tabs">
         {([
-          ['etudiant',     'Étudiant'],
+          ['etudiant',     'Etudiant'],
           ['inscription',  'Inscription'],
           ['recouvrement', 'Recouvrement'],
           ['pointage',     'Historique pointage'],

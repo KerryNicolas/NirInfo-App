@@ -1,8 +1,8 @@
-import { useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import Sidebar from '../../components/Sidebar'
-import ModuleTab from './ModuleTab'
+import Sidebar    from '../../components/Sidebar'
+import ModuleTab  from './ModuleTab'
 import SessionTab from './SessionTab'
+import HoraireTab from './HoraireForm'
 
 export default function FormationPage() {
   return (
@@ -12,6 +12,7 @@ export default function FormationPage() {
         <Routes>
           <Route path="module"  element={<ModuleTab />} />
           <Route path="session" element={<SessionTab />} />
+          <Route path="horaire" element={<HoraireTab />} />
           <Route path="*"       element={<Navigate to="module" replace />} />
         </Routes>
       </div>
