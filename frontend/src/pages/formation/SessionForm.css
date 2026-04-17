@@ -1,0 +1,56 @@
+.modern-form {
+  background: #f8fafc;
+  padding: 20px;
+  border-radius: 12px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.input-group label {
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: #334155;
+  font-weight: 500;
+}
+
+.input-group input,
+.input-group select {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5f5;
+  outline: none;
+  transition: 0.2s;
+  background: white;
+}
+
+.input-group input:focus,
+.input-group select:focus {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 2px #bae6fd;
+}
+
+.btn-modern {
+  width: 100%;
+  background: #0891b2;
+  color: white;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: 0.3s;
+}
+
+.btn-modern:hover {
+  background: #0e7490;
+}

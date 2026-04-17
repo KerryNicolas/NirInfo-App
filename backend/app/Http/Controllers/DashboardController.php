@@ -1,8 +1,5 @@
 <?php
-
 namespace App\Http\Controllers;
-
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -10,43 +7,32 @@ class DashboardController extends Controller
     public function stats()
     {
         try {
-            // Total étudiants
-            $totalEtudiants = DB::table('etudiant')->count();
-
-            // Sessions actives (date_fin >= aujourd'hui)
-            $sessionsActives = DB::table('session')
-                ->where('date_fin', '>=', now()->toDateString())
-                ->count();
-
-            // Inscriptions du mois en cours
+            $totalEtudiants   = DB::table('etudiant')->count();
+            
+            $sessionsActives  = DB::table('session')
+                                  ->where('fin_session', '>=', now()->toDateString())
+                                  ->count();
+            
             $inscriptionsMois = DB::table('inscription')
-                ->whereMonth('date_paiement', now()->month)
-                ->whereYear('date_paiement', now()->year)
-                ->count();
+                                  ->whereMonth('date_paiement', now()->month)
+                                  ->whereYear('date_paiement',  now()->year)
+                                  ->count();
+            
+            $revenusMois      = DB::table('inscription')
+                                  ->whereMonth('date_paiement', now()->month)
+                                  ->whereYear('date_paiement',  now()->year)
+                                  ->sum('montant_paye');
 
-            // Revenus du mois (inscriptions + recouvrements)
-            $revenusMois = DB::table('inscription')
-                ->whereMonth('date_paiement', now()->month)
-                ->whereYear('date_paiement', now()->year)
-                ->sum('montant_paye')
-                +
-                DB::table('recouvrement')
-                ->whereMonth('date_paiement', now()->month)
-                ->whereYear('date_paiement', now()->year)
-                ->sum('montant_paye');
-
-            // Dernières inscriptions (10 dernières)
-            $dernieresInscriptions = DB::table('inscription as i')
-                ->join('etudiant as e', 'i.matricule', '=', 'e.matricule')
-                ->leftJoin('session as s', 'i.code_session', '=', 's.code_session')
+            $dernieres = DB::table('inscription as i')
+                ->join('etudiant as e', 'i.matricule_etudiant', '=', 'e.matricule_etudiant')
                 ->select(
                     'i.id_paiement',
-                    'i.matricule',
-                    DB::raw("CONCAT(e.nom, ' ', e.prenom) as nom_complet"),
+                    'i.matricule_etudiant as matricule',
+                    DB::raw("CONCAT(e.nom_etudiant,' ',e.prenom_etudiant) as nom_complet"),
                     'i.code_session',
                     'i.date_paiement',
                     'i.montant_paye',
-                    'i.reste'
+                    'i.reste_a_payer as reste'
                 )
                 ->orderBy('i.id_paiement', 'DESC')
                 ->limit(10)
@@ -59,7 +45,7 @@ class DashboardController extends Controller
                     'inscriptions_mois' => $inscriptionsMois,
                     'revenus_mois'      => $revenusMois,
                 ],
-                'dernieres_inscriptions' => $dernieresInscriptions,
+                'dernieres_inscriptions' => $dernieres,
             ]);
 
         } catch (\Exception $e) {
@@ -72,6 +58,56 @@ class DashboardController extends Controller
                 ],
                 'dernieres_inscriptions' => [],
                 'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function charts()
+    {
+        try {
+            // Revenus par mois (année en cours)
+            $revenus = DB::table('inscription')
+                ->selectRaw("DATE_FORMAT(date_paiement, '%b') as mois,
+                             MONTH(date_paiement) as num_mois,
+                             SUM(montant_paye) as revenus")
+                ->whereYear('date_paiement', now()->year)
+                ->whereNotNull('date_paiement')
+                ->groupByRaw("MONTH(date_paiement), DATE_FORMAT(date_paiement, '%b')")
+                ->orderByRaw("MONTH(date_paiement)")
+                ->get();
+
+            // Inscriptions par mois (année en cours)
+            $inscriptions = DB::table('inscription')
+                ->selectRaw("DATE_FORMAT(date_paiement, '%b') as mois,
+                             MONTH(date_paiement) as num_mois,
+                             COUNT(*) as count")
+                ->whereYear('date_paiement', now()->year)
+                ->whereNotNull('date_paiement')
+                ->groupByRaw("MONTH(date_paiement), DATE_FORMAT(date_paiement, '%b')")
+                ->orderByRaw("MONTH(date_paiement)")
+                ->get();
+
+            // Répartition par lieu de paiement
+            $lieux = DB::table('inscription')
+                ->selectRaw('lieu_paiement as name, COUNT(*) as value')
+                ->whereNotNull('lieu_paiement')
+                ->where('lieu_paiement', '!=', '')
+                ->groupBy('lieu_paiement')
+                ->orderByRaw('COUNT(*) DESC')
+                ->get();
+
+            return response()->json([
+                'revenus'      => $revenus,
+                'inscriptions' => $inscriptions,
+                'lieux'        => $lieux,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'revenus'      => [],
+                'inscriptions' => [],
+                'lieux'        => [],
+                'error'        => $e->getMessage(),
             ]);
         }
     }

@@ -1,79 +1,78 @@
 <?php
-
 namespace App\Http\Controllers;
-
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class SessionController extends Controller
+class SessionController extends BaseApiController
 {
     public function index(Request $request)
     {
         $query = DB::table('session as s')
-            ->leftJoin('module as m', 's.code_module', '=', 'm.code_module')
-            ->leftJoin('horaire as h', 's.code_horaire', '=', 'h.code_horaire')
-            ->leftJoin('salarie as ed', 's.matricule_s', '=', 'ed.matricule_s')
-            ->leftJoin('formateur as f', 's.id_formateur', '=', 'f.id_formateur')
+            ->leftJoin('module as m',    's.code_module',   '=','m.code_module')
+            ->leftJoin('horaire as h',   's.code_horaire',  '=','h.code_horaire')
+            ->leftJoin('salarie as ed',  's.matricule_s',   '=','ed.matricule_s')
+            ->leftJoin('formateur as f', 's.matricule_f',   '=','f.matricule_f')
+            ->leftJoin('personnel as p', 'f.matricule_pers','=','p.matricule_pers')
+            ->leftJoin(DB::raw('(
+                SELECT code_session, lieu_paiement, COUNT(*) as cnt
+                FROM inscription GROUP BY code_session, lieu_paiement
+            ) as lieux'), function($j){ $j->on('s.code_session','=','lieux.code_session'); })
             ->select(
-                's.*',
-                'm.nom as module_nom',
-                'h.designation as horaire_designation',
-                'h.horaire as horaire_description',
-                DB::raw("CONCAT(ed.nom, ' ', ed.prenom, ' (', IFNULL(ed.matricule_s,''), ' - ', IFNULL(ed.telephone,''), ')') as editeur"),
-                DB::raw("CONCAT(f.nom, ' ', f.prenom, ' (', IFNULL(f.id_formateur,''), ' - ', IFNULL(f.telephone,''), ')') as formateur_nom")
-            )
-            ->orderBy('s.date_debut', 'DESC');
+                's.id',
+                's.code_session',
+                's.debut_session  as date_debut',
+                's.fin_session    as date_fin',
+                's.echeance       as date_echeance',
+                's.frais_module   as frais_formation',
+                's.code_module',
+                's.code_horaire',
+                'm.nom_module          as module_nom',
+                'h.designation_horaire as horaire_designation',
+                'h.description_horaire as horaire_description',
+                DB::raw("CONCAT(UCASE(LEFT(IFNULL(lieux.lieu_paiement,''),1)), LOWER(SUBSTRING(IFNULL(lieux.lieu_paiement,''),2))) as lieu"),
+                DB::raw("CONCAT(IFNULL(ed.nom_s,''),' ',IFNULL(ed.prenom_s,'')) as editeur"),
+                DB::raw("CONCAT(IFNULL(p.nom_pers,''),' ',IFNULL(p.prenom_pers,'')) as formateur_nom")
+            );
 
-        if ($request->has('search') && $request->search) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('s.code_session', 'like', "%$search%")
-                  ->orWhere('m.nom', 'like', "%$search%");
-            });
-        }
-
-        $sessions = $query->get();
-
-        return response()->json([
-            'data'  => $sessions,
-            'total' => $sessions->count(),
-        ]);
+        // LIFO : s.id DESC (le plus récent en premier)
+        $result  = $this->paginate($query, $request, ['s.code_session','m.nom_module'], 's.id');
+        $decoded = json_decode($result->getContent(), true);
+        // Dédupliquer par code_session (leftjoin lieux peut dupliquer)
+        $decoded['data'] = collect($decoded['data'])->unique('code_session')->values()->all();
+        return response()->json($decoded);
     }
 
     public function enCours(Request $request)
     {
-        $query = DB::table('session as s')
-            ->leftJoin('module as m', 's.code_module', '=', 'm.code_module')
-            ->leftJoin('horaire as h', 's.code_horaire', '=', 'h.code_horaire')
-            ->leftJoin('salarie as ed', 's.matricule_s', '=', 'ed.matricule_s')
-            ->leftJoin('formateur as f', 's.id_formateur', '=', 'f.id_formateur')
-            ->leftJoin(DB::raw('(SELECT code_session, COUNT(*) as nb_inscrits FROM inscription GROUP BY code_session) as ins'), 's.code_session', '=', 'ins.code_session')
-            ->where('s.date_fin', '>=', now()->toDateString())
-            ->select(
-                's.*',
-                'm.nom as module_nom',
-                'h.designation as horaire_designation',
-                'h.horaire as horaire_description',
-                DB::raw('IFNULL(ins.nb_inscrits, 0) as nb_inscrits'),
-                DB::raw("CONCAT(ed.nom, ' ', ed.prenom, ' (', IFNULL(ed.matricule_s,''), ' - ', IFNULL(ed.telephone,''), ')') as editeur"),
-                DB::raw("CONCAT(f.nom, ' ', f.prenom, ' (', IFNULL(f.id_formateur,''), ' - ', IFNULL(f.telephone,''), ')') as formateur_nom")
-            )
-            ->orderBy('s.date_debut', 'DESC');
+        try {
+            $query = DB::table('session as s')
+                ->leftJoin('module as m',    's.code_module',   '=','m.code_module')
+                ->leftJoin('horaire as h',   's.code_horaire',  '=','h.code_horaire')
+                ->leftJoin('formateur as f', 's.matricule_f',   '=','f.matricule_f')
+                ->leftJoin('personnel as p', 'f.matricule_pers','=','p.matricule_pers')
+                ->leftJoin(DB::raw('(SELECT code_session, COUNT(*) as nb_inscrits FROM inscription GROUP BY code_session) as ins'),
+                    's.code_session','=','ins.code_session')
+                ->where('s.fin_session','>=',now()->toDateString())
+                ->select(
+                    's.code_session',
+                    's.debut_session  as date_debut',
+                    's.fin_session    as date_fin',
+                    's.echeance       as date_echeance',
+                    's.frais_module   as frais_formation',
+                    'm.nom_module     as module_nom',
+                    'h.description_horaire as horaire_description',
+                    DB::raw('IFNULL(ins.nb_inscrits,0) as nb_inscrits'),
+                    DB::raw("CONCAT(IFNULL(p.nom_pers,''),' ',IFNULL(p.prenom_pers,'')) as formateur_nom")
+                )
+                ->orderBy('s.debut_session','DESC'); // LIFO
 
-        if ($request->has('lieu') && $request->lieu !== 'Tous') {
-            $query->where('s.lieu', $request->lieu);
+            if ($request->filled('module') && $request->module !== 'Tous')
+                $query->where('s.code_module',$request->module);
+
+            return response()->json(['data'=>$query->get()]);
+        } catch (\Exception $e) {
+            return response()->json(['data'=>[],'error'=>$e->getMessage()],500);
         }
-
-        if ($request->has('module') && $request->module !== 'Tous') {
-            $query->where('s.code_module', $request->module);
-        }
-
-        $sessions = $query->get();
-
-        return response()->json([
-            'data'       => $sessions,
-            'total'      => $sessions->count(),
-        ]);
     }
 
     public function store(Request $request)
@@ -81,61 +80,50 @@ class SessionController extends Controller
         $request->validate([
             'date_debut'      => 'required|date',
             'date_fin'        => 'required|date',
-            'date_echeance'   => 'required|date',
-            'code_horaire'    => 'required|string',
-            'code_module'     => 'required|string',
-            'frais_formation' => 'required|numeric',
-            'lieu'            => 'required|string',
-            'id_formateur'    => 'required|integer',
+            'code_horaire'    => 'required|string|exists:horaire,code_horaire',
+            'code_module'     => 'required|string|exists:module,code_module',
+            'frais_formation' => 'required|numeric|min:0',
         ]);
-
-        // Generate code_session
-        $module = DB::table('module')->where('code_module', $request->code_module)->first();
-        $moduleNom = $module ? strtolower(str_replace(' ', '', substr($module->nom, 0, 8))) : $request->code_module;
-        $horaire = DB::table('horaire')->where('code_horaire', $request->code_horaire)->first();
-        $horaireCourt = $horaire ? $request->code_horaire : 'XX';
-        $lieu = str_replace(' ', '', substr($request->lieu, 0, 3));
-
-        $codeSession = "{$moduleNom} du {$request->date_debut} {$horaireCourt} {$lieu}";
-
+        $code = $request->code_module.' du '.$request->date_debut.' '.$request->code_horaire;
+        $mf   = null;
+        if ($request->filled('id_formateur')) {
+            $f  = DB::table('formateur')->where('id_formateur',$request->id_formateur)->first();
+            $mf = $f?->matricule_f;
+        }
         DB::table('session')->insert([
-            'code_session'    => $codeSession,
-            'date_debut'      => $request->date_debut,
-            'date_fin'        => $request->date_fin,
-            'date_echeance'   => $request->date_echeance,
-            'code_horaire'    => $request->code_horaire,
-            'code_module'     => $request->code_module,
-            'frais_formation' => $request->frais_formation,
-            'lieu'            => $request->lieu,
-            'id_formateur'    => $request->id_formateur,
+            'code_session'  => $code,
+            'debut_session' => $request->date_debut,
+            'fin_session'   => $request->date_fin,
+            'echeance'      => $request->date_echeance ?? null,
+            'code_horaire'  => $request->code_horaire,
+            'code_module'   => $request->code_module,
+            'frais_module'  => $request->frais_formation,
+            'matricule_f'   => $mf,
         ]);
-
-        return response()->json(['message' => 'Session créée avec succès', 'code_session' => $codeSession], 201);
+        return $this->ok('Session créée avec succès', ['code_session'=>$code], 201);
     }
 
     public function show($id)
     {
-        $session = DB::table('session')->where('code_session', $id)->first();
-        if (!$session) {
-            return response()->json(['message' => 'Session non trouvée'], 404);
-        }
-        return response()->json($session);
-    }
-
-    public function destroy($id)
-    {
-        DB::table('session')->where('code_session', $id)->delete();
-        return response()->json(['message' => 'Session supprimée avec succès']);
+        $s = DB::table('session')->where('code_session',$id)->first();
+        if (!$s) return $this->err('Session non trouvée', 404);
+        return response()->json($s);
     }
 
     public function update(Request $request, $id)
     {
-        DB::table('session')->where('code_session', $id)->update([
-            'date_debut'      => $request->date_debut,
-            'date_fin'        => $request->date_fin,
-            'date_echeance'   => $request->date_echeance,
-            'frais_formation' => $request->frais_formation,
+        DB::table('session')->where('code_session',$id)->update([
+            'debut_session' => $request->date_debut,
+            'fin_session'   => $request->date_fin,
+            'echeance'      => $request->date_echeance ?? null,
+            'frais_module'  => $request->frais_formation,
         ]);
-        return response()->json(['message' => 'Session mise à jour avec succès']);
+        return $this->ok('Session mise à jour avec succès');
+    }
+
+    public function destroy($id)
+    {
+        DB::table('session')->where('code_session',$id)->delete();
+        return $this->ok('Session supprimée avec succès');
     }
 }

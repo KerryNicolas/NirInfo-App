@@ -1,0 +1,77 @@
+.dashboard {
+    min-height: 100vh;
+    background: #f1f5f9;
+    padding: 20px;
+}
+
+/* HEADER */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 40px;
+}
+
+.logout {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* HOME */
+.home {
+    text-align: center;
+}
+
+.home h1 {
+    font-size: 32px;
+    margin-bottom: 30px;
+}
+
+/* BUTTONS */
+.buttons {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+.btn {
+    padding: 15px 25px;
+    font-size: 16px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.simple {
+    background: #3b82f6;
+    color: white;
+}
+
+.simple:hover {
+    background: #2563eb;
+}
+
+.premium {
+    background: linear-gradient(135deg, gold, #1e3a8a);
+    color: white;
+}
+
+.premium:hover {
+    opacity: 0.9;
+}
+
+/* BACK BUTTON */
+.back {
+    margin-bottom: 15px;
+    padding: 8px 15px;
+    border: none;
+    background: #64748b;
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+}

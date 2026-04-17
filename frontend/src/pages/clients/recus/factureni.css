@@ -1,0 +1,281 @@
+/* ── PAGE WRAPPER ── */
+.page-wrapper,
+.page-wrapper *,
+.page-wrapper *::before,
+.page-wrapper *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+
+.page-wrapper {
+  all: revert;
+  display: flex;
+  gap: 40px;
+  padding: 30px;
+  min-height: 100vh;
+  background: #f0f2f5;
+  font-family: 'Arial', sans-serif;
+  box-sizing: border-box;
+}
+
+/* Logo de facture */
+.logo-img {
+  height: 60px;
+  width: auto;
+  margin-bottom: 8px;
+}
+
+/* ── FORMULAIRE (gauche) ── */
+.form-panel {
+  width: 300px;
+  flex-shrink: 0;
+  background: #fff;
+  border-radius: 10px;
+  padding: 24px 20px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: flex-start;
+  position: sticky;
+  top: 20px;
+}
+
+.form-header {
+  margin-bottom: 10px;
+}
+
+.form-logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a5bb5;
+  letter-spacing: 1px;
+}
+
+.form-header h2 {
+  font-size: 15px;
+  color: #333;
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.form-panel label {
+  font-size: 11px;
+  color: #666;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 6px;
+}
+
+.form-panel input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 13px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-panel input:focus {
+  border-color: #1a5bb5;
+}
+
+.form-divider {
+  margin: 10px 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #1a5bb5;
+  border-bottom: 1px solid #e0e6f0;
+  padding-bottom: 4px;
+}
+
+.print-btn {
+  margin-top: 16px;
+  padding: 10px;
+  background: #1a5bb5;
+  color: white;
+  border: none;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.print-btn:hover {
+  background: #144a96;
+}
+
+/* ── FACTURE (droite) ── */
+.facture {
+  flex: 1;
+  background: #fff;
+  border-radius: 10px;
+  padding: 40px 50px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.1);
+  font-family: 'Arial', sans-serif;
+  font-size: 13px;
+  color: #222;
+  min-width: 500px;
+}
+
+/* En-tête */
+.facture-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+}
+
+.facture-emetteur {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #333;
+}
+
+.facture-logo {
+  font-size: 22px;
+  font-weight: 800;
+  color: #1a5bb5;
+  border: 2px solid #1a5bb5;
+  border-radius: 6px;
+  padding: 2px 10px;
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
+.logo-icon {
+  font-size: 16px;
+}
+
+.facture-ref {
+  text-align: right;
+  min-width: 220px;
+}
+
+.facture-titre {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111;
+  margin: 0 0 14px;
+  text-transform: uppercase;
+}
+
+.facture-nom {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 4px 0;
+}
+
+.facture-ref p {
+  margin: 3px 0;
+}
+
+/* Date */
+.facture-date {
+  margin-bottom: 18px;
+  font-size: 13px;
+  color: #333;
+}
+
+/* Tableau */
+.facture-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 24px;
+}
+
+.facture-table th {
+  background: #f7f7f7;
+  border: 1px solid #ccc;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 13px;
+  color: #222;
+  font-weight: 600;
+}
+
+.facture-table td {
+  border: 1px solid #ccc;
+  padding: 10px 12px;
+  vertical-align: top;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Arrêté */
+.facture-arrete {
+  font-size: 13px;
+  margin: 18px 0 30px;
+  color: #222;
+}
+
+/* Signature */
+.facture-signature {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.signature-bloc {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.signature-bloc > p {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.signature-zone {
+  width: 100px;
+  height: 50px;
+  border-bottom: 2px solid #555;
+  margin: 6px 0;
+}
+
+.cachet-box {
+  border: 2px solid #1a5bb5;
+  border-radius: 4px;
+  padding: 8px 14px;
+  font-size: 11px;
+  color: #1a5bb5;
+  line-height: 1.6;
+  max-width: 260px;
+}
+
+.cachet-box p {
+  margin: 1px 0;
+}
+
+/* ── IMPRESSION ── */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .page-wrapper {
+    background: white;
+    padding: 0;
+  }
+
+  .facture {
+    box-shadow: none;
+    border-radius: 0;
+    padding: 30px 40px;
+    width: 100%;
+  }
+
+  body {
+    background: white;
+  }
+}

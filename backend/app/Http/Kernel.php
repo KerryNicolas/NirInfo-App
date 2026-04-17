@@ -23,7 +23,7 @@ class Kernel extends HttpKernel
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
         'api' => [
-            \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
+            // ThrottleRequests SUPPRIMÉ — causait les erreurs 429
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
     ];

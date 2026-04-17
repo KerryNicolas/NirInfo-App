@@ -1,16 +1,19 @@
 import { Link } from 'react-router-dom'
+import Logo from '../assets/lgo.png'
+
 
 export default function LandingPage() {
   return (
     <div className="hero-page">
       {/* Navbar */}
-      <nav className="hero-nav">
+        <nav className="hero-nav">
         <div className="hero-nav-logo">
-          <div style={{ width: 36, height: 36, background: '#3b82f6', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            🎓
+          <div style={{ width: 40, height: 36, background: '#eef1f7', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src={Logo} alt="Logo" height="36" style={{ objectFit: 'contain', borderRadius: 4 }} />
           </div>
           Nir'Info
         </div>
+
         <ul className="hero-nav-links">
           <li><a href="#">Accueil</a></li>
           <li><a href="#">Formations</a></li>
@@ -24,18 +27,6 @@ export default function LandingPage() {
 
       {/* Hero body */}
       <div className="hero-body">
-        <div className="hero-badge">
-          <span className="dot" />
-          Inscriptions ouvertes pour 2026
-        </div>
-        <h1 className="hero-h1">
-          Formez-vous pour<br />
-          <span>l'avenir</span> professionnel
-        </h1>
-        <p className="hero-subtitle">
-          Des formations professionnelles de qualité pour booster votre carrière.
-          Rejoignez des milliers d'étudiants qui font confiance à notre centre.
-        </p>
         <div className="hero-actions">
           <Link to="/login" className="btn-hero-primary">
             Voir les formations →
