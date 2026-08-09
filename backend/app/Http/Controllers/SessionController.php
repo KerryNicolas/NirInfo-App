@@ -99,6 +99,8 @@ class SessionController extends BaseApiController
             'code_module'   => $request->code_module,
             'frais_module'  => $request->frais_formation,
             'matricule_f'   => $mf,
+            // ── FIX : capture de l'éditeur, absente jusqu'ici ──
+            'matricule_s'   => auth()->user()->matricule ?? null,
         ]);
         return $this->ok('Session créée avec succès', ['code_session'=>$code], 201);
     }

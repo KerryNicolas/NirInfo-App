@@ -10,16 +10,18 @@ class PersonnelController extends BaseApiController
     {
         $query = DB::table('personnel as p')
             ->leftJoin('fonction as f','p.id_fonction','=','f.id_fonction')
+            // FIX : jointure éditeur ajoutée — absente jusqu'ici
+            ->leftJoin('users as u', 'p.matricule_s', '=', 'u.id')
             ->select(
                 'p.matricule_pers','p.nom_pers','p.prenom_pers','p.ddn_pers',
                 'p.cin_pers','p.tel_pers','p.email_pers','p.dembauche_pers',
                 'p.salaire_pers','p.diplome_pers','p.adresse_pers','p.photo_pers',
-                'p.id_fonction','f.nom_fonction'
+                'p.id_fonction','f.nom_fonction',
+                DB::raw("IFNULL(u.name,'') as editeur")
             );
         if ($request->filled('id_fonction'))
             $query->where('p.id_fonction',$request->id_fonction);
 
-        // LIFO : matricule_pers DESC
         return $this->paginate($query, $request,
             ['p.nom_pers','p.prenom_pers','p.matricule_pers','p.cin_pers'],
             'p.matricule_pers'
@@ -51,7 +53,8 @@ class PersonnelController extends BaseApiController
             'adresse_pers'    => $request->adresse_pers    ?? '',
             'id_fonction'     => $request->id_fonction,
             'photo_pers'      => '',
-            'matricule_s'     => null,
+            // FIX : capture de l'éditeur, absente jusqu'ici
+            'matricule_s'     => auth()->id(),
         ]);
         return $this->ok('Personnel enregistré', ['matricule' => $request->matricule_pers], 201);
     }
@@ -106,12 +109,15 @@ class PersonnelController extends BaseApiController
     /* ── FONCTIONS ── */
     public function indexFonction(Request $request)
     {
-        $query = DB::table('fonction')
-            ->select('id_fonction','nom_fonction','description_fonction');
-        // LIFO : id_fonction DESC
+        $query = DB::table('fonction as f')
+            ->leftJoin('users as u', 'f.matricule_s', '=', 'u.id')
+            ->select(
+                'f.id_fonction','f.nom_fonction','f.description_fonction',
+                DB::raw("IFNULL(u.name,'') as editeur")
+            );
         return $this->paginate($query, $request,
-            ['nom_fonction','description_fonction'],
-            'id_fonction'
+            ['f.nom_fonction','f.description_fonction'],
+            'f.id_fonction'
         );
     }
 
@@ -121,7 +127,8 @@ class PersonnelController extends BaseApiController
         $id = DB::table('fonction')->insertGetId([
             'nom_fonction'         => $request->nom_fonction,
             'description_fonction' => $request->description_fonction ?? '',
-            'matricule_s'          => null,
+            // FIX : cohérence avec les autres modules, même si pas encore affiché en UI
+            'matricule_s'          => auth()->id(),
         ]);
         return $this->ok('Fonction créée', ['id_fonction'=>$id], 201);
     }

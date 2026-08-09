@@ -17,6 +17,7 @@ class User extends Authenticatable
         'phone',
         'password',
         'role',
+        'role_id',
         'matricule',
     ];
 
@@ -29,4 +30,14 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password'          => 'hashed',
     ];
+
+    public function roleRelation()
+    {
+        return $this->belongsTo(\App\Models\Role::class, 'role_id');
+    }
+
+    public function hasPermission(string $slug): bool
+    {
+        return $this->roleRelation?->permissions()->where('slug', $slug)->exists() ?? false;
+    }
 }

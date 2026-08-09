@@ -1,9 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import api from '../api/axios'
 
-/* ═══════════════════════════════════════════════
-   Types
-═══════════════════════════════════════════════ */
 export interface TableMeta {
   total:        number
   per_page:     number
@@ -33,6 +30,7 @@ export interface UseTableReturn<T> {
   setPage:    (p: number) => void
   setSort:    (col: string) => void
   setPerPage: (n: number) => void
+  setParams:  (p: Record<string, string | number>) => void
   reload:     () => void
   reset:      () => void
 }
@@ -41,9 +39,6 @@ const DEFAULT_META: TableMeta = {
   total: 0, per_page: 15, current_page: 1, last_page: 1, from: 0, to: 0
 }
 
-/* ═══════════════════════════════════════════════
-   Hook
-═══════════════════════════════════════════════ */
 export function useTable<T = Record<string, unknown>>(
   endpoint: string,
   options: UseTableOptions = {}
@@ -52,21 +47,21 @@ export function useTable<T = Record<string, unknown>>(
     perPage:     initPerPage = 15,
     defaultSort: initSort    = '',
     defaultDir:  initDir     = 'desc',
-    params:      extraParams = {},
+    params:      extraParamsInit = {},
     autoLoad                 = true,
   } = options
 
-  const [data,    setData]    = useState<T[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState<string | null>(null)
-  const [meta,    setMeta]    = useState<TableMeta>(DEFAULT_META)
-  const [search,  setSearchRaw]  = useState('')
-  const [page,    setPageRaw]    = useState(1)
-  const [perPage, setPerPageRaw] = useState(initPerPage)
-  const [sortCol, setSortCol]    = useState(initSort)
-  const [sortDir, setSortDir]    = useState<'asc' | 'desc'>(initDir)
+  const [data,        setData]       = useState<T[]>([])
+  const [loading,     setLoading]    = useState(false)
+  const [error,       setError]      = useState<string | null>(null)
+  const [meta,        setMeta]       = useState<TableMeta>(DEFAULT_META)
+  const [search,      setSearchRaw]  = useState('')
+  const [page,        setPageRaw]    = useState(1)
+  const [perPage,     setPerPageRaw] = useState(initPerPage)
+  const [sortCol,     setSortCol]    = useState(initSort)
+  const [sortDir,     setSortDir]    = useState<'asc' | 'desc'>(initDir)
+  const [extraParams, setExtraParams] = useState<Record<string, string | number>>(extraParamsInit)
 
-  // Ref pour éviter les closures périmées
   const stateRef = useRef({ page, perPage, search, sortCol, sortDir, extraParams })
   stateRef.current = { page, perPage, search, sortCol, sortDir, extraParams }
 
@@ -118,25 +113,22 @@ export function useTable<T = Record<string, unknown>>(
   // Chargement initial
   useEffect(() => {
     if (autoLoad) {
-      fetchData({ page: 1, perPage: initPerPage, search: '', sortCol: initSort, sortDir: initDir, extraParams })
+      fetchData({ page: 1, perPage: initPerPage, search: '', sortCol: initSort, sortDir: initDir, extraParams: extraParamsInit })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Rechargement quand extraParams changent (pour EtatPage / EcheancePage)
-  const prevParamsRef = useRef(JSON.stringify(extraParams))
+  // Rechargement quand extraParams changent
+  const prevParamsRef = useRef(JSON.stringify(extraParamsInit))
   useEffect(() => {
     const current = JSON.stringify(extraParams)
     if (current !== prevParamsRef.current) {
       prevParamsRef.current = current
-      if (Object.keys(extraParams).length > 0) {
-        fetchData({ page: 1, perPage, search, sortCol, sortDir, extraParams })
-        setPageRaw(1)
-      }
+      fetchData({ page: 1, perPage, search, sortCol, sortDir, extraParams })
+      setPageRaw(1)
     }
   }, [extraParams, fetchData, perPage, search, sortCol, sortDir])
 
-  /* ── Actions publiques ── */
   const setSearch = useCallback((v: string) => {
     setSearchRaw(v)
     setPageRaw(1)
@@ -167,6 +159,15 @@ export function useTable<T = Record<string, unknown>>(
     fetchData({ page: 1, perPage: s.perPage, search: s.search, sortCol: col, sortDir: dir, extraParams: s.extraParams })
   }, [fetchData])
 
+  // ── NOUVEAU : setParams ──
+  const setParams = useCallback((p: Record<string, string | number>) => {
+    setExtraParams(p)
+    setSearchRaw('')
+    setPageRaw(1)
+    const s = stateRef.current
+    fetchData({ page: 1, perPage: s.perPage, search: '', sortCol: s.sortCol, sortDir: s.sortDir, extraParams: p })
+  }, [fetchData])
+
   const reload = useCallback(() => {
     const s = stateRef.current
     fetchData({ page: s.page, perPage: s.perPage, search: s.search, sortCol: s.sortCol, sortDir: s.sortDir, extraParams: s.extraParams })
@@ -174,13 +175,15 @@ export function useTable<T = Record<string, unknown>>(
 
   const reset = useCallback(() => {
     setSearchRaw(''); setPageRaw(1); setSortCol(initSort); setSortDir(initDir)
-    fetchData({ page: 1, perPage, search: '', sortCol: initSort, sortDir: initDir, extraParams })
-  }, [fetchData, perPage, initSort, initDir, extraParams])
+    setExtraParams(extraParamsInit)
+    fetchData({ page: 1, perPage, search: '', sortCol: initSort, sortDir: initDir, extraParams: extraParamsInit })
+  }, [fetchData, perPage, initSort, initDir, extraParamsInit])
 
   return {
     data, loading, error, meta,
     search, sortCol, sortDir,
     setSearch, setPage, setSort, setPerPage,
+    setParams,
     reload, reset,
   }
 }

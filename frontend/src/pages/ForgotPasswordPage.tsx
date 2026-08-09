@@ -2,32 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
-
-const IconMail = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="4" width="20" height="16" rx="2"/>
-    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-  </svg>
-)
-
-const IconArrowLeft = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 12H5M12 19l-7-7 7-7"/>
-  </svg>
-)
-
-const IconSend = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M5 12h14M12 5l7 7-7 7"/>
-  </svg>
-)
-
-const IconCheckCircle = () => (
-  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/>
-    <path d="m9 12 2 2 4-4"/>
-  </svg>
-)
+import { IconMail, IconArrowLeft, IconSend, IconCheckCircle } from '.././components/icons'
 
 export default function ForgotPasswordPage() {
   const { forgotPassword } = useAuth()
@@ -51,7 +26,7 @@ export default function ForgotPasswordPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(145deg, #0a0f1e 0%, #0f172a 40%, #1e3a8a 80%, #1d4ed8 100%)',
+      background: '#111C3D',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '24px',
     }}>

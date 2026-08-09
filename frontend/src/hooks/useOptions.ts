@@ -1,16 +1,6 @@
 import { useState, useEffect } from 'react'
 import api from '../api/axios'
 
-/**
- * useOptions — charge une liste complète pour les <select>
- * Gère automatiquement les deux formats de réponse :
- *   - { data: [...] }  (paginated)
- *   - [...]            (array direct)
- *
- * Usage:
- *   const modules = useOptions<Module>('/modules', 'code_module', 'nom')
- *   <select>{modules.map(m => <option value={m.value}>{m.label}</option>)}</select>
- */
 export function useOptions<T = Record<string, unknown>>(
   endpoint: string,
   valueKey: keyof T,

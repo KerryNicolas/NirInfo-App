@@ -6,10 +6,6 @@ use App\Models\Etudiant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-/**
- * EtudiantController — exemple de migration vers BaseApiController + Eloquent.
- * Tous vos autres controllers suivront exactement le même pattern.
- */
 class EtudiantController extends BaseApiController
 {
     /* ══════════════════════════════════════
@@ -32,7 +28,8 @@ class EtudiantController extends BaseApiController
                 'etudiant.tel_etudiant       as telephone',
                 'etudiant.mail_etudiant      as email',
                 'etudiant.photo_etudiant     as photo',
-                DB::raw("CONCAT(IFNULL(s.nom_s,''),' ',IFNULL(s.prenom_s,'')) as editeur")
+                DB::raw("CONCAT(IFNULL(s.nom_s,''),' ',IFNULL(s.prenom_s,'')) as editeur"),
+                DB::raw("CAST(SUBSTRING(etudiant.matricule_etudiant, 4) AS UNSIGNED) as tri_matricule")
             );
 
         return $this->paginate($query, $request, [
@@ -40,7 +37,7 @@ class EtudiantController extends BaseApiController
             'etudiant.prenom_etudiant',
             'etudiant.matricule_etudiant',
             'etudiant.cin_etudiant',
-        ], 'etudiant.matricule_etudiant');
+        ], 'tri_matricule');
     }
 
     /* ══════════════════════════════════════
@@ -54,7 +51,6 @@ class EtudiantController extends BaseApiController
             'sexe'   => 'required|in:HOMME,FEMME',
         ]);
 
-        // Génération matricule NI-XXXX
         $last = DB::table('etudiant')->max(DB::raw("CAST(SUBSTRING(matricule_etudiant, 4) AS UNSIGNED)"));
         $matricule = 'NI-' . str_pad(($last ?? 0) + 1, 4, '0', STR_PAD_LEFT);
 
@@ -71,6 +67,8 @@ class EtudiantController extends BaseApiController
             'tel_etudiant'       => $request->telephone       ?? '',
             'mail_etudiant'      => $request->email           ?? '',
             'photo_etudiant'     => '',
+            // ── FIX : capture de l'éditeur, absente jusqu'ici (comme tous les autres modules) ──
+            'matricule_s'        => auth()->user()->matricule ?? null,
         ]);
 
         return $this->ok('Étudiant créé avec succès', ['matricule' => $matricule], 201);
@@ -116,7 +114,7 @@ class EtudiantController extends BaseApiController
     {
         $request->validate(['photo' => 'required|image|max:2048']);
 
-        $filename = 'etudiant_' . time() . '.' . $request->photo->extension();
+        $filename = $id . '_' . time() . '.' . $request->photo->extension();
         $request->photo->storeAs('public/photos', $filename);
 
         DB::table('etudiant')

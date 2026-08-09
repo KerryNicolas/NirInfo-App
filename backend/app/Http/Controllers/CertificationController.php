@@ -32,7 +32,6 @@ class CertificationController extends BaseApiController
                     DB::raw("CONCAT(IFNULL(s.nom_s,''),' ',IFNULL(s.prenom_s,'')) as editeur")
                 );
 
-            // LIFO : id DESC — le dernier certificat généré en premier
             return $this->paginate($query, $request,
                 ['c.matricule', 'e.nom_etudiant', 'e.prenom_etudiant', 'c.reference', 'c.code_module'],
                 'c.id'
@@ -49,7 +48,6 @@ class CertificationController extends BaseApiController
             'code_module' => 'required|string',
         ]);
 
-        // Référence unique basée sur le dernier id
         $last      = DB::table('certificat')->orderBy('id', 'DESC')->first();
         $num       = $last ? ($last->id + 1) : 1;
         $reference = 'CERT-' . date('Y') . '-' . str_pad($num, 4, '0', STR_PAD_LEFT);
@@ -57,6 +55,13 @@ class CertificationController extends BaseApiController
         $session = null;
         if ($request->filled('code_session')) {
             $session = DB::table('session')->where('code_session', $request->code_session)->first();
+        }
+
+        // Prix par défaut = dernier prix standard défini, si aucun prix fourni
+        $prix = $request->prix;
+        if (!$prix) {
+            $dernierPrix = DB::table('prix_certificat')->orderBy('id_prix_certificat', 'DESC')->first();
+            $prix = $dernierPrix?->prix;
         }
 
         DB::table('certificat')->insert([
@@ -68,12 +73,12 @@ class CertificationController extends BaseApiController
             'nom_formation' => $request->nom_formation_certificat ?? null,
             'lieu_paiement' => $request->lieu_paiement ?? null,
             'code_session'  => $request->code_session  ?? null,
-            'accept'        => 1,
-            'prix'          => $request->prix ?? null,
+            'accept'        => 0,
+            'prix'          => $prix,
             'date'          => now(),
         ]);
 
-        return response()->json(['message' => 'Certificat généré', 'reference' => $reference], 201);
+        return response()->json(['message' => 'Certificat créé, en attente de validation.', 'reference' => $reference], 201);
     }
 
     public function show($id)
@@ -89,6 +94,58 @@ class CertificationController extends BaseApiController
         return $this->ok('Certificat supprimé');
     }
 
+    // Validation finale — réservée à l'admin, crée la transaction de paiement
+    public function valider(Request $request, $id)
+    {
+        $request->validate([
+            'id_compte' => 'required|integer|exists:compte,id_compte',
+            'prix'      => 'nullable|numeric|min:0',
+        ]);
+
+        $c = DB::table('certificat')->where('reference', $id)->orWhere('id', $id)->first();
+        if (!$c) return $this->err('Certificat non trouvé', 404);
+
+        $prixFinal = $request->prix ?? $c->prix ?? 0;
+
+        DB::beginTransaction();
+        try {
+            // 1. Créer la transaction (entrée)
+            $idTransaction = DB::table('transaction')->insertGetId([
+                'transaction_type' => 'E',
+                'amount'           => $prixFinal,
+                'reson'            => 'Certification ' . $c->reference,
+                'account'          => $request->id_compte,
+                'date_transaction' => now()->toDateString(),
+            ]);
+
+            // 2. Mettre à jour le solde du compte
+            DB::table('compte')->where('id_compte', $request->id_compte)
+                ->increment('montant', $prixFinal);
+
+            // 3. Historiser dans gestion_compte
+            DB::table('gestion_compte')->insert([
+                'id_compte'      => $request->id_compte,
+                'type'           => 'E',
+                'montant'        => $prixFinal,
+                'date_gestion'   => now()->toDateString(),
+                'id_transaction' => $idTransaction,
+            ]);
+
+            // 4. Valider le certificat
+            DB::table('certificat')->where('id', $c->id)->update([
+                'accept'         => 1,
+                'prix'           => $prixFinal,
+                'id_transaction' => $idTransaction,
+            ]);
+
+            DB::commit();
+            return $this->ok('Certificat validé et paiement enregistré avec succès.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Erreur lors de la validation.', 'error' => $e->getMessage()], 500);
+        }
+    }
+
     public function montant(Request $request)
     {
         try {
@@ -99,5 +156,36 @@ class CertificationController extends BaseApiController
         } catch (\Exception $e) {
             return response()->json(['nb' => 0, 'montant' => 0]);
         }
+    }
+
+    // ── Gestion du prix standard des certificats ──
+    public function getPrix()
+    {
+        $dernier = DB::table('prix_certificat')->orderBy('id_prix_certificat', 'DESC')->first();
+        return response()->json(['prix' => $dernier?->prix ?? 0]);
+    }
+
+    public function getPrixHistorique()
+    {
+        $historique = DB::table('prix_certificat')->orderBy('id_prix_certificat', 'DESC')->get();
+        return response()->json($historique);
+    }
+
+    public function setPrix(Request $request)
+    {
+        $request->validate(['prix' => 'required|integer|min:0']);
+
+        DB::table('prix_certificat')->insert([
+            'prix'              => $request->prix,
+            'date_modification' => now()->toDateString(),
+        ]);
+
+        return $this->ok('Prix mis à jour avec succès.');
+    }
+
+    // ── Comptes disponibles (pour le select de validation) ──
+    public function comptes()
+    {
+        return response()->json(DB::table('compte')->select('id_compte', 'libelle')->get());
     }
 }

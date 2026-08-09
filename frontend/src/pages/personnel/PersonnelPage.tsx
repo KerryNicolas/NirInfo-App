@@ -1,39 +1,25 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import api from '../../api/axios'
 import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
-
-/* ── Icônes ── */
-const IcoPlus   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-const IcoEdit   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-const IcoTrash  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-const IcoSearch = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-const IcoSave   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-const IcoX      = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-const IcoBack   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-const IcoCamera = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-const IcoUsers  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-const IcoFunc   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
-const IcoExport = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-const IcoHamburger = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-const IcoClose  = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-const IcoLogout = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-const IcoSettings = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+import { IcoUsers, IcoFunc, IcoClose, IcoHamburger, IcoBack, IcoSettings, IcoLogout, IcoEdit, IcoPlus, IcoSearch, IcoCamera, IcoSave, IcoX, IcoExport, IcoTrash } from '../../components/icons'
 
 type Tab = 'personnel' | 'fonction'
 interface Fonction  { 
   id_fonction: number;
   nom_fonction: string; 
   description_fonction: string 
+  editeur?: string
 }
 interface Personnel {
   matricule_pers: string; 
   nom_pers: string; 
   prenom_pers: string
   ddn_pers: string; 
+  photo_pers: string;
   cin_pers: string; 
   tel_pers: string; 
   email_pers: string
@@ -41,9 +27,9 @@ interface Personnel {
   salaire_pers: number; 
   diplome_pers: string
   adresse_pers: string; 
-  // photo_pers: string; 
   id_fonction: number; 
   nom_fonction: string
+  editeur?: string
 }
 
 const fmt    = (n: number) => new Intl.NumberFormat('fr-MG').format(n)
@@ -55,6 +41,70 @@ const navItems = [
 
 const EMPTY_P = { matricule_pers:'', nom_pers:'', prenom_pers:'', ddn_pers:'', cin_pers:'', tel_pers:'', email_pers:'', dembauche_pers:'', salaire_pers:'', diplome_pers:'', adresse_pers:'', id_fonction:'' }
 const EMPTY_F = { nom_fonction:'', description_fonction:'' }
+const fmtM = (n: number) => new Intl.NumberFormat('fr-MG').format(n)
+
+// ── Modal de détail — même pattern que le reste de l'appli ──
+function DetailModal({ p, onClose }: { p: Personnel; onClose: () => void }) {
+  const rows: [string, string][] = [
+    ['Matricule', p.matricule_pers],
+    ['Nom', `${p.nom_pers} ${p.prenom_pers}`],
+    ['Fonction', p.nom_fonction || '—'],
+    ['Téléphone', p.tel_pers || '—'],
+    ['Email', p.email_pers || '—'],
+    ['CIN', p.cin_pers || '—'],
+    ['Date de naissance', p.ddn_pers || '—'],
+    ['Date d\'embauche', p.dembauche_pers || '—'],
+    ['Salaire', `${fmtM(p.salaire_pers)} Ar`],
+    ['Diplôme', p.diplome_pers || '—'],
+    ['Adresse', p.adresse_pers || '—'],
+    ['Éditeur', p.editeur?.trim() || '—'],
+  ]
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }} onClick={onClose}>
+      <div style={{ width:460, background:'white', borderRadius:12, padding:24 }} onClick={ev => ev.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+          <span style={{ fontWeight:700, fontSize:16 }}>Détail du personnel</span>
+          <button onClick={onClose} className="btn-icon"><IcoX /></button>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:13 }}>
+          {rows.map(([label, val]) => (
+            <div key={label} style={{ display:'contents' }}>
+              <span style={{ color:'#64748b' }}>{label} :</span>
+              <span style={{ fontWeight:500 }}>{val}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Modal de détail pour Fonction ──
+function DetailModalFonction({ f, onClose }: { f: Fonction; onClose: () => void }) {
+  const rows: [string, string][] = [
+    ['Nom de la fonction', f.nom_fonction],
+    ['Description', f.description_fonction || '—'],
+    ['Éditeur', f.editeur?.trim() || '—'],
+  ]
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }} onClick={onClose}>
+      <div style={{ width:420, background:'white', borderRadius:12, padding:24 }} onClick={ev => ev.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+          <span style={{ fontWeight:700, fontSize:16 }}>Détail de la fonction</span>
+          <button onClick={onClose} className="btn-icon"><IcoX /></button>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:13 }}>
+          {rows.map(([label, val]) => (
+            <div key={label} style={{ display:'contents' }}>
+              <span style={{ color:'#64748b' }}>{label} :</span>
+              <span style={{ fontWeight:500 }}>{val}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function PersonnelPage() {
   const navigate   = useNavigate()
@@ -66,34 +116,29 @@ export default function PersonnelPage() {
   })
   useEffect(() => { localStorage.setItem(SK, String(open)) }, [open])
 
-  /* ── useTable — URL correcte /personnel sans s ── */
   const personnelTable = useTable<Personnel>('/personnel', { perPage: 15 })
   const fonctionTable  = useTable<Fonction>('/fonctions',  { perPage: 15 })
 
-  /* ── Liste fonctions pour le select du formulaire ── */
   const [fonctionsList, setFonctionsList] = useState<Fonction[]>([])
   useEffect(() => {
-    // Charger toutes les fonctions pour le select (per_page=500)
     api.get('/fonctions', { params: { per_page: 500 } })
       .then(r => setFonctionsList(r.data.data ?? []))
       .catch(() => {})
-  }, [fonctionTable.meta.total]) // recharge si ajout/suppression
+  }, [fonctionTable.meta.total])
 
-  /* ── Formulaire Personnel ── */
   const [formP,    setFormP]    = useState<Record<string,string>>(EMPTY_P)
   const [editP,    setEditP]    = useState<Personnel | null>(null)
   const [savingP,  setSavingP]  = useState(false)
 
-  /* ── Formulaire Fonction ── */
   const [formF,    setFormF]    = useState(EMPTY_F)
   const [editF,    setEditF]    = useState<Fonction | null>(null)
   const [savingF,  setSavingF]  = useState(false)
+  const [viewingP, setViewingP] = useState<Personnel | null>(null)
+  const [viewingF, setViewingF] = useState<Fonction | null>(null)
 
-  /* ── CRUD Personnel ── */
   const handleSubmitPersonnel = async (e: React.FormEvent) => {
     e.preventDefault(); setSavingP(true)
     try {
-      // URL correcte : /personnel (sans s)
       if (editP) { await api.put(`/personnel/${editP.matricule_pers}`, formP); toast.success('Personnel modifié') }
       else       { await api.post('/personnel', formP); toast.success('Personnel enregistré') }
       setFormP(EMPTY_P); setEditP(null); personnelTable.reload()
@@ -113,6 +158,8 @@ export default function PersonnelPage() {
     window.scrollTo({ top:0, behavior:'smooth' })
   }
 
+  const resetPersonnel = () => { setFormP(EMPTY_P); setEditP(null) }
+
   const handlePhotoPersonnel = async (matricule: string, file: File) => {
     const fd = new FormData(); fd.append('photo', file)
     try {
@@ -121,7 +168,6 @@ export default function PersonnelPage() {
     } catch { toast.error('Erreur upload photo') }
   }
 
-  /* ── CRUD Fonctions ── */
   const handleSubmitFonction = async (e: React.FormEvent) => {
     e.preventDefault(); setSavingF(true)
     try {
@@ -131,6 +177,8 @@ export default function PersonnelPage() {
     } catch (err: any) { toast.error(err.response?.data?.message ?? 'Erreur enregistrement') }
     finally { setSavingF(false) }
   }
+
+  const resetFonction = () => { setFormF(EMPTY_F); setEditF(null) }
 
   const handleDeleteFonction = async (id: number) => {
     if (!confirm('Supprimer cette fonction ?')) return
@@ -145,15 +193,10 @@ export default function PersonnelPage() {
     toast.success('Export CSV téléchargé')
   }
 
-  /* ── Styles ── */
-  const inp: React.CSSProperties  = { width:'100%', padding:'8px 10px', border:'1px solid #d1d5db', borderRadius:7, fontSize:13, fontFamily:'inherit', boxSizing:'border-box' }
-  const btnP: React.CSSProperties = { display:'flex', alignItems:'center', justifyContent:'center', gap:6, background:'linear-gradient(135deg,#1e40af,#2563eb)', color:'white', border:'none', borderRadius:8, padding:'9px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }
-  const btnC: React.CSSProperties = { display:'flex', alignItems:'center', justifyContent:'center', gap:6, background:'#f1f5f9', color:'#64748b', border:'1px solid #e2e8f0', borderRadius:8, padding:'9px 12px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }
-
   return (
     <div className="app-layout">
 
-      {/* ── SIDEBAR ── */}
+      {/* ── SIDEBAR (inchangée) ── */}
       <div className="sidebar" style={{ width:open?210:52, minWidth:open?210:52, overflow:'hidden', transition:'width 0.22s cubic-bezier(0.4,0,0.2,1), min-width 0.22s cubic-bezier(0.4,0,0.2,1)', flexShrink:0 }}>
         <div className="sidebar-logo" style={{ display:'flex', alignItems:'center', justifyContent:open?'space-between':'center', padding:open?'0 12px 0 16px':'0', gap:8, overflow:'hidden', minHeight:54 }}>
           {open && <span style={{ fontWeight:700, fontSize:15, color:'white', whiteSpace:'nowrap' }}>Personnel</span>}
@@ -169,7 +212,7 @@ export default function PersonnelPage() {
               <span style={{ opacity:open?1:0, maxWidth:open?160:0, overflow:'hidden', whiteSpace:'nowrap', transition:'opacity 0.18s, max-width 0.22s' }}>{m.label}</span>
             </button>
           ))}
-          <div style={{ height:1, background:'rgba(255,255,255,0.07)', margin:'6px 0' }} />
+          <div style={{ height:1, background:'rgba(255,255,255,0.07)', margin:'12px 16px' }} />
           <button onClick={() => navigate('/dashboard')} title={!open?'Retour':undefined}
             style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:open?'flex-start':'center', gap:open?10:0, padding:open?'9px 16px':'9px 0', background:'none', border:'none', borderLeft:'3px solid transparent', color:'#94a3b8', cursor:'pointer', fontFamily:'inherit', fontSize:13, transition:'all 0.15s' }}>
             <span style={{ flexShrink:0 }}><IcoBack /></span>
@@ -192,243 +235,225 @@ export default function PersonnelPage() {
 
       {/* ── CONTENU ── */}
       <div className="main-content">
-        <div style={{ background:'white', borderBottom:'1px solid #e2e8f0', padding:'14px 24px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 1px 3px rgba(0,0,0,0.06)', position:'sticky', top:0, zIndex:30 }}>
-          <span style={{ fontWeight:700, fontSize:15, color:'#0f172a' }}>Personnel</span>
-          <div style={{ width:1, height:20, background:'#e2e8f0' }} />
-          <div style={{ display:'flex', gap:4, background:'#f8fafc', borderRadius:11, padding:4, border:'1px solid #e2e8f0' }}>
-            {navItems.map(m => (
-              <button key={m.t} onClick={() => setTab(m.t)}
-                style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 18px', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit', border:'none', background:tab===m.t?'linear-gradient(135deg,#1e40af,#2563eb)':'transparent', color:tab===m.t?'white':'#64748b', transition:'all 0.15s' }}>
-                {m.icon}{m.label}
-              </button>
-            ))}
-          </div>
+        <div className="top-bar">
+          <span className="top-bar-title" style={{ display:'flex', alignItems:'center', gap:8 }}>Personnel</span>
+        </div>
+        <div className="tabs">
+          {navItems.map(m => (
+            <button key={m.t} className={`tab-btn${tab === m.t ? ' active' : ''}`} onClick={() => setTab(m.t)}>
+              {m.label}
+            </button>
+          ))}
         </div>
 
-        <div style={{ padding:24, display:'flex', gap:20, alignItems:'flex-start' }}>
+        <div style={{ padding: '4px 24px 24px' }}>
 
-          {/* ════ PERSONNEL ════ */}
+          {/* ════ PERSONNEL — mêmes classes CSS que SessionForm ════ */}
           {tab === 'personnel' && (<>
-            {/* Formulaire */}
-            <div style={{ width:300, flexShrink:0 }}>
-              <div className="card" style={{ padding:20 }}>
-                <h3 style={{ fontSize:14, fontWeight:700, color:'#0f172a', marginBottom:16, display:'flex', alignItems:'center', gap:8 }}>
-                  {editP ? <><IcoEdit /> Modifier</> : <><IcoPlus /> Nouveau personnel</>}
-                </h3>
-                <form onSubmit={handleSubmitPersonnel} style={{ display:'flex', flexDirection:'column', gap:11 }}>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>Matricule *</label>
-                      <input value={formP.matricule_pers} onChange={e => setFormP({...formP, matricule_pers:e.target.value})} placeholder="PERS-0001" required disabled={!!editP} style={{ ...inp, ...(editP?{background:'#f8fafc',color:'#94a3b8'}:{}) }} />
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div className="card-header">
+                <span className="card-title" style={{ display:'flex', alignItems:'center', gap:7 }}>
+                  {editP ? <IcoEdit /> : <IcoPlus />} {editP ? 'Modifier le personnel' : 'Nouveau personnel'}
+                </span>
+                {editP && <button className="btn btn-secondary btn-sm" onClick={resetPersonnel} style={{ display:'flex', alignItems:'center', gap:5 }}><IcoX /> Annuler</button>}
+              </div>
+              <div className="card-body">
+                <form onSubmit={handleSubmitPersonnel}>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">Matricule </label>
+                      <input className="form-control" value={formP.matricule_pers} onChange={e => setFormP({...formP, matricule_pers:e.target.value})} required disabled={!!editP} placeholder="Ex: PERS-0001" />
                     </div>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>Fonction *</label>
-                      <select value={formP.id_fonction} onChange={e => setFormP({...formP, id_fonction:e.target.value})} required style={{ ...inp, background:'white' }}>
-                        <option value="">-- Choisir --</option>
+                    <div className="form-group">
+                      <label className="form-label">Fonction </label>
+                      <select className="form-control" value={formP.id_fonction} onChange={e => setFormP({...formP, id_fonction:e.target.value})} required>
+                        <option value="">-- Choisir une fonction --</option>
                         {fonctionsList.map(f => <option key={f.id_fonction} value={f.id_fonction}>{f.nom_fonction}</option>)}
                       </select>
                     </div>
                   </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>Nom *</label>
-                      <input value={formP.nom_pers} onChange={e => setFormP({...formP, nom_pers:e.target.value})} placeholder="Nom" required style={inp} />
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">Nom </label>
+                      <input className="form-control" value={formP.nom_pers} onChange={e => setFormP({...formP, nom_pers:e.target.value})} required placeholder="Nom" />
                     </div>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>Prénom *</label>
-                      <input value={formP.prenom_pers} onChange={e => setFormP({...formP, prenom_pers:e.target.value})} placeholder="Prénom" required style={inp} />
-                    </div>
-                  </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>Date naissance</label>
-                      <input type="date" value={formP.ddn_pers} onChange={e => setFormP({...formP, ddn_pers:e.target.value})} style={inp} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>CIN</label>
-                      <input value={formP.cin_pers} onChange={e => setFormP({...formP, cin_pers:e.target.value})} placeholder="N° CIN" style={inp} />
+                    <div className="form-group">
+                      <label className="form-label">Prénom </label>
+                      <input className="form-control" value={formP.prenom_pers} onChange={e => setFormP({...formP, prenom_pers:e.target.value})} required placeholder="Prénom" />
                     </div>
                   </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>Téléphone</label>
-                      <input value={formP.tel_pers} onChange={e => setFormP({...formP, tel_pers:e.target.value})} placeholder="034..." style={inp} />
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">Date de naissance</label>
+                      <input className="form-control" type="date" value={formP.ddn_pers} onChange={e => setFormP({...formP, ddn_pers:e.target.value})} />
                     </div>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>Email</label>
-                      <input type="email" value={formP.email_pers} onChange={e => setFormP({...formP, email_pers:e.target.value})} style={inp} />
-                    </div>
-                  </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>Date embauche</label>
-                      <input type="date" value={formP.dembauche_pers} onChange={e => setFormP({...formP, dembauche_pers:e.target.value})} style={inp} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>Salaire (Ar)</label>
-                      <input type="number" min="0" value={formP.salaire_pers} onChange={e => setFormP({...formP, salaire_pers:e.target.value})} placeholder="0" style={inp} />
+                    <div className="form-group">
+                      <label className="form-label">N° CIN</label>
+                      <input className="form-control" value={formP.cin_pers} onChange={e => setFormP({...formP, cin_pers:e.target.value})} placeholder="N° CIN" />
                     </div>
                   </div>
-                  <div>
-                    <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>Diplôme</label>
-                    <input value={formP.diplome_pers} onChange={e => setFormP({...formP, diplome_pers:e.target.value})} placeholder="Bac+3..." style={inp} />
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">Téléphone</label>
+                      <input className="form-control" value={formP.tel_pers} onChange={e => setFormP({...formP, tel_pers:e.target.value})} placeholder="034..." />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Email</label>
+                      <input className="form-control" type="email" value={formP.email_pers} onChange={e => setFormP({...formP, email_pers:e.target.value})} />
+                    </div>
                   </div>
-                  <div>
-                    <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:3 }}>Adresse</label>
-                    <input value={formP.adresse_pers} onChange={e => setFormP({...formP, adresse_pers:e.target.value})} style={inp} />
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">Date d'embauche</label>
+                      <input className="form-control" type="date" value={formP.dembauche_pers} onChange={e => setFormP({...formP, dembauche_pers:e.target.value})} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Salaire (Ar)</label>
+                      <input className="form-control" type="number" min="0" value={formP.salaire_pers} onChange={e => setFormP({...formP, salaire_pers:e.target.value})} placeholder="0" />
+                    </div>
                   </div>
-                  <div style={{ display:'flex', gap:8, marginTop:4 }}>
-                    <button type="submit" disabled={savingP} style={{ ...btnP, flex:1, opacity:savingP?0.7:1 }}><IcoSave /> {editP?'Modifier':'Enregistrer'}</button>
-                    {editP && <button type="button" onClick={() => { setEditP(null); setFormP(EMPTY_P) }} style={btnC}><IcoX /></button>}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">Diplôme</label>
+                      <input className="form-control" value={formP.diplome_pers} onChange={e => setFormP({...formP, diplome_pers:e.target.value})} placeholder="Bac+3..." />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Adresse</label>
+                      <input className="form-control" value={formP.adresse_pers} onChange={e => setFormP({...formP, adresse_pers:e.target.value})} />
+                    </div>
                   </div>
+                  <button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:6 }} disabled={savingP}>
+                    {savingP ? <><span className="spinner" style={{ width:14, height:14, borderWidth:2 }} /> Enregistrement…</> : editP ? <><IcoSave /> Mettre à jour</> : <><IcoPlus /> Enregistrer</>}
+                  </button>
                 </form>
               </div>
             </div>
 
-            {/* Tableau personnel avec useTable + Pagination */}
-            <div style={{ flex:1, minWidth:0 }}>
-              <div className="card" style={{ padding:'14px 18px', marginBottom:14, display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
-                <div className="search-bar" style={{ flex:1, minWidth:160 }}>
-                  <IcoSearch />
-                  <input value={personnelTable.search} onChange={e => personnelTable.setSearch(e.target.value)} placeholder="Rechercher..." />
-                  {personnelTable.search && <button onClick={() => personnelTable.setSearch('')} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', fontSize:16 }}>×</button>}
+            <div className="card">
+              <div className="card-header">
+                <div className="section-info">
+                  <div className="section-title">Liste du personnel</div>
+                  <div className="section-count">{personnelTable.meta.total > 0 ? `${personnelTable.meta.total} membre(s)` : `${personnelTable.data.length} membre(s)`}</div>
                 </div>
-                <button onClick={exportPersonnels} style={{ display:'flex', alignItems:'center', gap:6, background:'#16a34a', color:'white', border:'none', borderRadius:7, padding:'7px 12px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoExport /> Export</button>
-              </div>
-
-              <div style={{ background:'linear-gradient(135deg,#0f172a,#1e3a8a)', borderRadius:10, padding:'12px 18px', marginBottom:14, display:'flex', justifyContent:'space-between', color:'white' }}>
-                <span style={{ fontSize:13, fontWeight:600, opacity:0.85 }}>Total personnel</span>
-                <span style={{ fontSize:18, fontWeight:800 }}>{personnelTable.meta.total > 0 ? personnelTable.meta.total : personnelTable.data.length} membre(s)</span>
-              </div>
-
-              <div className="card" style={{ padding:0, overflow:'hidden' }}>
-                <div className="table-wrapper">
-                  {personnelTable.loading ? <div className="loading-center"><div className="spinner" /> Chargement…</div> : (
-                    <table style={{ minWidth:800 }}>
-                      <thead><tr><th>#</th><th>Photo</th><th>Matricule</th><th>Nom & Prénom</th><th>Fonction</th><th>Téléphone</th><th>Salaire</th><th>Action</th></tr></thead>
-                      <tbody>
-                        {personnelTable.data.length === 0
-                          ? <tr><td colSpan={8} style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>Aucun personnel enregistré</td></tr>
-                          : personnelTable.data.map((p, i) => (
-                            <tr key={p.matricule_pers}>
-                              <td style={{ color:'#94a3b8', fontSize:12 }}>{(personnelTable.meta.current_page-1)*personnelTable.meta.per_page+i+1}</td>
-                              <td>
-                                <div style={{ width:36, height:36, borderRadius:'50%', overflow:'hidden', background:'#f1f5f9', display:'flex', alignItems:'center', justifyContent:'center', position:'relative' }}>
-                                  {p.photo_pers
-                                    ? <img src={`http://localhost:8000/storage/${p.photo_pers}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                                  }
-                                  <label style={{ position:'absolute', inset:0, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0)', transition:'background 0.2s' }}
-                                    onMouseEnter={e => (e.currentTarget.style.background='rgba(0,0,0,0.4)')}
-                                    onMouseLeave={e => (e.currentTarget.style.background='rgba(0,0,0,0)')}>
-                                    <IcoCamera />
-                                    <input type="file" accept="image/*" hidden onChange={e => e.target.files?.[0] && handlePhotoPersonnel(p.matricule_pers, e.target.files[0])} />
-                                  </label>
-                                </div>
-                              </td>
-                              <td><span className="badge badge-info">{p.matricule_pers}</span></td>
-                              <td style={{ fontWeight:600, color:'#0f172a' }}>{p.nom_pers} {p.prenom_pers}</td>
-                              <td><span className="badge badge-success">{p.nom_fonction || '—'}</span></td>
-                              <td style={{ fontSize:12, color:'#64748b' }}>{p.tel_pers || '—'}</td>
-                              <td style={{ fontWeight:700, color:'#1d4ed8', fontSize:13 }}>{fmt(p.salaire_pers)} Ar</td>
-                              <td>
-                                <div className="table-actions">
-                                  <button className="btn-icon edit" onClick={() => startEditPersonnel(p)}><IcoEdit /></button>
-                                  <button className="btn-icon delete" onClick={() => handleDeletePersonnel(p.matricule_pers)}><IcoTrash /></button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        }
-                      </tbody>
-                    </table>
-                  )}
+                <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                  <div className="search-bar">
+                    <IcoSearch />
+                    <input placeholder="Mot à rechercher..." value={personnelTable.search} onChange={e => personnelTable.setSearch(e.target.value)} />
+                    {personnelTable.search && <button onClick={() => personnelTable.setSearch('')} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', padding:0, fontSize:16 }}>×</button>}
+                  </div>
+                  <button className="btn btn-secondary btn-sm" onClick={exportPersonnels} style={{ display:'flex', alignItems:'center', gap:6 }}><IcoExport /> Export</button>
                 </div>
-                {!personnelTable.loading && personnelTable.meta.total > 0 && (
-                  <Pagination meta={personnelTable.meta} onPage={personnelTable.setPage} onPerPage={personnelTable.setPerPage} />
+              </div>
+              <div className="table-wrapper">
+                {personnelTable.loading ? <div className="loading-center"><div className="spinner" /> Chargement…</div> : (
+                  <table>
+                    <thead><tr><th>#</th><th>Photo</th><th>Matricule</th><th>Nom & Prénom</th><th>Fonction</th><th>Téléphone</th><th>Salaire</th><th>Action</th></tr></thead>
+                    <tbody>
+                      {personnelTable.data.length === 0 ? (
+                        <tr><td colSpan={8}><div className="empty-state">{personnelTable.search ? `Aucun résultat pour « ${personnelTable.search} »` : 'Aucun personnel enregistré'}</div></td></tr>
+                      ) : personnelTable.data.map((p, i) => (
+                        <tr key={p.matricule_pers} onClick={() => setViewingP(p)} style={{ cursor:'pointer' }}>
+                          <td style={{ color:'#94a3b8', fontSize:12 }}>{(personnelTable.meta.current_page-1)*personnelTable.meta.per_page+i+1}</td>
+                          <td>
+                            <div style={{ width:36, height:36, borderRadius:'50%', overflow:'hidden', background:'#f1f5f9', display:'flex', alignItems:'center', justifyContent:'center', position:'relative' }}>
+                              {p.photo_pers
+                                ? <img src={`http://localhost:8000/storage/${p.photo_pers}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                                : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                              }
+                              <label onClick={ev => ev.stopPropagation()} style={{ position:'absolute', inset:0, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                                <IcoCamera />
+                                <input type="file" accept="image/*" hidden onChange={e => e.target.files?.[0] && handlePhotoPersonnel(p.matricule_pers, e.target.files[0])} />
+                              </label>
+                            </div>
+                          </td>
+                          <td><span className="badge badge-info">{p.matricule_pers}</span></td>
+                          <td style={{ fontWeight:600 }}>{p.nom_pers} {p.prenom_pers}</td>
+                          <td><span className="badge badge-success">{p.nom_fonction || '—'}</span></td>
+                          <td style={{ fontSize:12, color:'#64748b' }}>{p.tel_pers || '—'}</td>
+                          <td style={{ fontWeight:600, color:'#16a34a' }}>{fmt(p.salaire_pers)} Ar</td>
+                          <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
+                            <button className="btn-icon edit" onClick={() => startEditPersonnel(p)}><IcoEdit /></button>
+                            <button className="btn-icon delete" onClick={() => handleDeletePersonnel(p.matricule_pers)}><IcoTrash /></button>
+                          </div></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
+              {!personnelTable.loading && personnelTable.meta.total > 0 && <Pagination meta={personnelTable.meta} onPage={personnelTable.setPage} onPerPage={personnelTable.setPerPage} />}
             </div>
           </>)}
 
-          {/* ════ FONCTION ════ */}
-          {tab === 'fonction' && (
-            <div style={{ width:'100%', display:'flex', gap:20, alignItems:'flex-start' }}>
-              {/* Formulaire */}
-              <div style={{ width:300, flexShrink:0 }}>
-                <div className="card" style={{ padding:20 }}>
-                  <h3 style={{ fontSize:14, fontWeight:700, color:'#0f172a', marginBottom:16, display:'flex', alignItems:'center', gap:8 }}>
-                    {editF ? <><IcoEdit /> Modifier la fonction</> : <><IcoPlus /> Nouvelle fonction</>}
-                  </h3>
-                  <form onSubmit={handleSubmitFonction} style={{ display:'flex', flexDirection:'column', gap:12 }}>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:4 }}>Nom de la fonction *</label>
-                      <input value={formF.nom_fonction} onChange={e => setFormF({...formF, nom_fonction:e.target.value})} placeholder="Ex: Formateur..." required style={inp} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:4 }}>Description</label>
-                      <textarea value={formF.description_fonction} onChange={e => setFormF({...formF, description_fonction:e.target.value})} placeholder="Description optionnelle..." rows={3} style={{ ...inp, resize:'vertical' }} />
-                    </div>
-                    <div style={{ display:'flex', gap:8 }}>
-                      <button type="submit" disabled={savingF} style={{ ...btnP, flex:1, opacity:savingF?0.7:1 }}><IcoSave /> {editF?'Modifier':'Créer'}</button>
-                      {editF && <button type="button" onClick={() => { setEditF(null); setFormF(EMPTY_F) }} style={btnC}><IcoX /></button>}
-                    </div>
-                  </form>
-                </div>
+          {/* ════ FONCTION — mêmes classes CSS que SessionForm ════ */}
+          {tab === 'fonction' && (<>
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div className="card-header">
+                <span className="card-title" style={{ display:'flex', alignItems:'center', gap:7 }}>
+                  {editF ? <IcoEdit /> : <IcoPlus />} {editF ? 'Modifier la fonction' : 'Nouvelle fonction'}
+                </span>
+                {editF && <button className="btn btn-secondary btn-sm" onClick={resetFonction} style={{ display:'flex', alignItems:'center', gap:5 }}><IcoX /> Annuler</button>}
               </div>
-
-              {/* Tableau fonctions avec useTable + Pagination */}
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ background:'linear-gradient(135deg,#0f172a,#1e3a8a)', borderRadius:10, padding:'12px 18px', marginBottom:14, display:'flex', justifyContent:'space-between', color:'white' }}>
-                  <span style={{ fontSize:13, fontWeight:600, opacity:0.85 }}>Fonctions créées</span>
-                  <span style={{ fontSize:18, fontWeight:800 }}>{fonctionTable.meta.total > 0 ? fonctionTable.meta.total : fonctionTable.data.length}</span>
-                </div>
-
-                {/* Search fonctions */}
-                <div className="card" style={{ padding:'12px 16px', marginBottom:14 }}>
-                  <div className="search-bar">
-                    <IcoSearch />
-                    <input value={fonctionTable.search} onChange={e => fonctionTable.setSearch(e.target.value)} placeholder="Rechercher une fonction..." />
-                    {fonctionTable.search && <button onClick={() => fonctionTable.setSearch('')} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', fontSize:16 }}>×</button>}
+              <div className="card-body">
+                <form onSubmit={handleSubmitFonction}>
+                  <div className="form-group">
+                    <label className="form-label">Nom de la fonction </label>
+                    <input className="form-control" value={formF.nom_fonction} onChange={e => setFormF({...formF, nom_fonction:e.target.value})} required placeholder="Ex: Formateur..." />
                   </div>
-                </div>
-
-                <div className="card" style={{ padding:0, overflow:'hidden' }}>
-                  <div className="table-wrapper">
-                    {fonctionTable.loading ? <div className="loading-center"><div className="spinner" /> Chargement…</div> : (
-                      <table>
-                        <thead><tr><th>#</th><th>Nom de la fonction</th><th>Description</th><th>Action</th></tr></thead>
-                        <tbody>
-                          {fonctionTable.data.length === 0
-                            ? <tr><td colSpan={4} style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>Aucune fonction créée</td></tr>
-                            : fonctionTable.data.map((f, i) => (
-                              <tr key={f.id_fonction}>
-                                <td style={{ color:'#94a3b8', fontSize:12 }}>{(fonctionTable.meta.current_page-1)*fonctionTable.meta.per_page+i+1}</td>
-                                <td style={{ fontWeight:600, color:'#0f172a' }}>{f.nom_fonction}</td>
-                                <td style={{ fontSize:12, color:'#64748b' }}>{f.description_fonction || '—'}</td>
-                                <td>
-                                  <div className="table-actions">
-                                    <button className="btn-icon edit" onClick={() => { setEditF(f); setFormF({ nom_fonction:f.nom_fonction, description_fonction:f.description_fonction??'' }) }}><IcoEdit /></button>
-                                    <button className="btn-icon delete" onClick={() => handleDeleteFonction(f.id_fonction)}><IcoTrash /></button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                          }
-                        </tbody>
-                      </table>
-                    )}
+                  <div className="form-group">
+                    <label className="form-label">Description</label>
+                    <input className="form-control" value={formF.description_fonction} onChange={e => setFormF({...formF, description_fonction:e.target.value})} placeholder="Description optionnelle..." />
                   </div>
-                  {!fonctionTable.loading && fonctionTable.meta.total > 0 && (
-                    <Pagination meta={fonctionTable.meta} onPage={fonctionTable.setPage} onPerPage={fonctionTable.setPerPage} />
-                  )}
-                </div>
+                  <button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:6 }} disabled={savingF}>
+                    {savingF ? <><span className="spinner" style={{ width:14, height:14, borderWidth:2 }} /> Enregistrement…</> : editF ? <><IcoSave /> Mettre à jour</> : <><IcoPlus /> Enregistrer</>}
+                  </button>
+                </form>
               </div>
             </div>
-          )}
+
+            <div className="card">
+              <div className="card-header">
+                <div className="section-info">
+                  <div className="section-title">Liste des fonction(s)</div>
+                  <div className="section-count">{fonctionTable.meta.total > 0 ? `${fonctionTable.meta.total} fonction(s)` : `${fonctionTable.data.length} fonction(s)`}</div>
+                </div>
+                <div className="search-bar">
+                  <IcoSearch />
+                  <input placeholder="Mot à rechercher..." value={fonctionTable.search} onChange={e => fonctionTable.setSearch(e.target.value)} />
+                  {fonctionTable.search && <button onClick={() => fonctionTable.setSearch('')} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', padding:0, fontSize:16 }}>×</button>}
+                </div>
+              </div>
+              <div className="table-wrapper">
+                {fonctionTable.loading ? <div className="loading-center"><div className="spinner" /> Chargement…</div> : (
+                  <table>
+                    <thead><tr><th>#</th><th>Nom de la fonction</th><th>Description</th><th>Action</th></tr></thead>
+                    <tbody>
+                      {fonctionTable.data.length === 0 ? (
+                        <tr><td colSpan={4}><div className="empty-state">{fonctionTable.search ? `Aucun résultat pour « ${fonctionTable.search} »` : 'Aucune fonction créée'}</div></td></tr>
+                      ) : fonctionTable.data.map((f, i) => (
+                        <tr key={f.id_fonction} onClick={() => setViewingF(f)} style={{ cursor:'pointer' }}>
+                          <td style={{ color:'#94a3b8', fontSize:12 }}>{(fonctionTable.meta.current_page-1)*fonctionTable.meta.per_page+i+1}</td>
+                          <td style={{ fontWeight:600 }}>{f.nom_fonction}</td>
+                          <td style={{ fontSize:12, color:'#64748b' }}>{f.description_fonction || '—'}</td>
+                          <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
+                            <button className="btn-icon edit" onClick={() => { setEditF(f); setFormF({ nom_fonction:f.nom_fonction, description_fonction:f.description_fonction??'' }); window.scrollTo({top:0,behavior:'smooth'}) }}><IcoEdit /></button>
+                            <button className="btn-icon delete" onClick={() => handleDeleteFonction(f.id_fonction)}><IcoTrash /></button>
+                          </div></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              {!fonctionTable.loading && fonctionTable.meta.total > 0 && <Pagination meta={fonctionTable.meta} onPage={fonctionTable.setPage} onPerPage={fonctionTable.setPerPage} />}
+            </div>
+          </>)}
 
         </div>
       </div>
+
+      {viewingP && <DetailModal p={viewingP} onClose={() => setViewingP(null)} />}
+      {viewingF && <DetailModalFonction f={viewingF} onClose={() => setViewingF(null)} />}
     </div>
   )
 }

@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import api from '../api/axios'
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
+import api, { getCsrfCookie } from '../api/axios'
 
 interface User {
   id: number
@@ -7,18 +7,20 @@ interface User {
   email: string
   phone?: string
   role?: string
+  role_slug?: string
+  permissions?: string[]
   matricule?: string
 }
 
 interface AuthCtx {
   user: User | null
-  token: string | null
   login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string, password_confirmation: string) => Promise<void>
   logout: () => void
   forgotPassword: (email: string) => Promise<void>
   resetPassword: (data: ResetPasswordData) => Promise<void>
   updateProfile: (data: UpdateProfileData) => Promise<void>
+  hasPermission: (slug: string) => boolean
+  isAdmin: () => boolean
   loading: boolean
 }
 
@@ -38,47 +40,55 @@ interface UpdateProfileData {
   password_confirmation?: string
 }
 
+// Durée d'inactivité avant déconnexion automatique — 30 minutes
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000
+const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
+
 const AuthContext = createContext<AuthCtx>({} as AuthCtx)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser]     = useState<User | null>(null)
-  const [token, setToken]   = useState<string | null>(localStorage.getItem('token'))
+  const [user, setUser]       = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    const stored = localStorage.getItem('user')
-    if (stored && token) setUser(JSON.parse(stored))
-    setLoading(false)
-  }, [token])
+    api.get('/user')
+      .then(res => setUser(res.data))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false))
+  }, [])
 
   const login = async (email: string, password: string) => {
+    await getCsrfCookie()
     const res = await api.post('/login', { email, password })
-    const { user, token } = res.data
-    localStorage.setItem('token', token)
-    localStorage.setItem('user', JSON.stringify(user))
-    setToken(token)
-    setUser(user)
-  }
-
-  const register = async (
-    name: string, email: string,
-    password: string, password_confirmation: string
-  ) => {
-    const res = await api.post('/register', { name, email, password, password_confirmation })
-    const { user, token } = res.data
-    localStorage.setItem('token', token)
-    localStorage.setItem('user', JSON.stringify(user))
-    setToken(token)
-    setUser(user)
+    setUser(res.data.user)
   }
 
   const logout = async () => {
     try { await api.post('/logout') } catch (_) {}
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    setToken(null)
     setUser(null)
   }
+
+  // ── Déconnexion automatique sur inactivité ──
+  useEffect(() => {
+    if (!user) return
+
+    const resetIdleTimer = () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current)
+      idleTimer.current = setTimeout(() => {
+        logout()
+      }, IDLE_TIMEOUT_MS)
+    }
+
+    resetIdleTimer()
+    ACTIVITY_EVENTS.forEach(evt => window.addEventListener(evt, resetIdleTimer))
+
+    return () => {
+      if (idleTimer.current) clearTimeout(idleTimer.current)
+      ACTIVITY_EVENTS.forEach(evt => window.removeEventListener(evt, resetIdleTimer))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
 
   const forgotPassword = async (email: string) => {
     await api.post('/forgot-password', { email })
@@ -90,15 +100,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = async (data: UpdateProfileData) => {
     const res = await api.put('/profile', data)
-    const updated = res.data.user
-    localStorage.setItem('user', JSON.stringify(updated))
-    setUser(updated)
+    setUser(res.data.user)
+  }
+
+  const hasPermission = (slug: string): boolean => {
+    return user?.permissions?.includes(slug) ?? false
+  }
+
+  const isAdmin = (): boolean => {
+    return user?.role_slug === 'admin'
   }
 
   return (
     <AuthContext.Provider value={{
-      user, token, login, register, logout,
+      user, login, logout,
       forgotPassword, resetPassword, updateProfile,
+      hasPermission, isAdmin,
       loading,
     }}>
       {children}

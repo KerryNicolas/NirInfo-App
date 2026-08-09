@@ -1,0 +1,142 @@
+<?php
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class GererController extends BaseApiController
+{
+    // ─── Liste des transactions manuelles (dépôts/retraits), en excluant celles
+    // générées automatiquement par les autres modules (inscription, recouvrement,
+    // charge, achat, prestation) — même logique que TransactionModel::getAll() en CI ──
+    public function index(Request $request)
+    {
+        $exclus = ['inscription', 'recouvrement', 'charge', 'achat', 'prestation', 'recouvrement_prestation', 'certificat'];
+
+        $query = DB::table('transaction as t')
+            ->join('compte as c', 't.account', '=', 'c.id_compte')
+            ->leftJoin('users as u', 't.matricule_s', '=', 'u.id')
+            ->whereNotIn('t.reson', $exclus)
+            ->where('t.reson', 'NOT LIKE', 'Certification %')
+            ->select(
+                't.id_transaction',
+                't.transaction_type',
+                't.amount',
+                't.reson',
+                't.account',
+                'c.account_number',
+                'c.libelle',
+                DB::raw("IFNULL(u.name, '') as editeur")
+            );
+
+        return $this->paginate($query, $request,
+            ['t.reson', 'c.account_number', 'c.libelle'],
+            't.id_transaction'
+        );
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'compte'  => 'required|integer|exists:compte,id_compte',
+            'type'    => 'required|in:E,S',
+            'montant' => 'required|numeric|min:1',
+            'raison'  => 'required|string|max:255',
+        ]);
+
+        // Empêche un retrait supérieur au solde disponible
+        if ($request->type === 'S') {
+            $solde = (float) DB::table('compte')->where('id_compte', $request->compte)->value('montant');
+            if ($request->montant > $solde) {
+                return $this->err('Solde insuffisant pour ce retrait', 422);
+            }
+        }
+
+        DB::beginTransaction();
+        try {
+            DB::table('transaction')->insert([
+                'transaction_type' => $request->type,
+                'amount'           => $request->montant,
+                'reson'            => $request->raison,
+                'account'          => $request->compte,
+                'matricule_s'      => auth()->id(),
+            ]);
+
+            if ($request->type === 'E') {
+                DB::table('compte')->where('id_compte', $request->compte)->increment('montant', $request->montant);
+            } else {
+                DB::table('compte')->where('id_compte', $request->compte)->decrement('montant', $request->montant);
+            }
+
+            DB::commit();
+            return $this->ok('Opération enregistrée avec succès', [], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Erreur lors de l\'enregistrement', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    // ─── Modification — annule l'effet de l'ancienne opération puis applique la nouvelle ──
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'compte'  => 'required|integer|exists:compte,id_compte',
+            'type'    => 'required|in:E,S',
+            'montant' => 'required|numeric|min:1',
+            'raison'  => 'required|string|max:255',
+        ]);
+
+        $original = DB::table('transaction')->where('id_transaction', $id)->first();
+        if (!$original) {
+            return $this->err('Opération non trouvée', 404);
+        }
+
+        DB::beginTransaction();
+        try {
+            // 1. Annule l'effet de l'ancienne opération sur l'ancien compte
+            if ($original->transaction_type === 'E') {
+                DB::table('compte')->where('id_compte', $original->account)->decrement('montant', $original->amount);
+            } else {
+                DB::table('compte')->where('id_compte', $original->account)->increment('montant', $original->amount);
+            }
+
+            // 2. Vérifie le solde suffisant si la nouvelle opération est un retrait
+            if ($request->type === 'S') {
+                $soldeApresAnnulation = (float) DB::table('compte')->where('id_compte', $request->compte)->value('montant');
+                if ($request->montant > $soldeApresAnnulation) {
+                    DB::rollBack();
+                    return $this->err('Solde insuffisant pour cette modification', 422);
+                }
+            }
+
+            // 3. Applique l'effet de la nouvelle opération (compte éventuellement différent)
+            if ($request->type === 'E') {
+                DB::table('compte')->where('id_compte', $request->compte)->increment('montant', $request->montant);
+            } else {
+                DB::table('compte')->where('id_compte', $request->compte)->decrement('montant', $request->montant);
+            }
+
+            // 4. Met à jour la ligne de transaction
+            DB::table('transaction')->where('id_transaction', $id)->update([
+                'transaction_type' => $request->type,
+                'amount'           => $request->montant,
+                'reson'            => $request->raison,
+                'account'          => $request->compte,
+            ]);
+
+            DB::commit();
+            return $this->ok('Opération mise à jour avec succès');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Erreur lors de la mise à jour', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function destroy($id)
+    {
+        DB::table('transaction')->where('id_transaction', $id)->delete();
+        return $this->ok('Supprimé avec succès');
+    }
+}

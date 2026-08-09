@@ -1,56 +1,10 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
+import { IconEyeOff, IconEye, IconUser, IconMail, IconPhone, IconSave, IconLock, IcoUsers } from '.././components/icons'
 
-const IconUser = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="8" r="4"/>
-    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-  </svg>
-)
 
-const IconLock = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="11" width="18" height="11" rx="2"/>
-    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-  </svg>
-)
-
-const IconMail = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="4" width="20" height="16" rx="2"/>
-    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-  </svg>
-)
-
-const IconPhone = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-  </svg>
-)
-
-const IconEye = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
-    <circle cx="12" cy="12" r="3"/>
-  </svg>
-)
-
-const IconEyeOff = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-    <line x1="1" y1="1" x2="23" y2="23"/>
-  </svg>
-)
-
-const IconSave = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-    <polyline points="17 21 17 13 7 13 7 21"/>
-    <polyline points="7 3 7 8 15 8"/>
-  </svg>
-)
 
 function PwdInput({ label, value, onChange, placeholder }: {
   label: string; value: string; onChange: (v: string) => void; placeholder: string
@@ -81,7 +35,8 @@ function PwdInput({ label, value, onChange, placeholder }: {
 }
 
 export default function ProfilePage() {
-  const { user, updateProfile } = useAuth()
+  const { user, updateProfile, isAdmin } = useAuth()
+  const navigate = useNavigate()
 
   // Infos personnelles
   const [name, setName]   = useState(user?.name  || '')
@@ -163,8 +118,22 @@ export default function ProfilePage() {
               {user?.role === 'admin' ? 'Administrateur' : 'Gestionnaire'}
             </span>
           </div>
+
+          {/* FIX : bouton "Créer un utilisateur" positionné dans la zone haute-droite,
+              exactement comme demandé — visible uniquement pour l'admin */}
+          {isAdmin() && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
+              onClick={() => navigate('/admin/create-user')}
+            >
+              <IcoUsers /> Créer un utilisateur
+            </button>
+          )}
+
           {user?.matricule && (
-            <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+            <div style={{ marginLeft: isAdmin() ? 16 : 'auto', textAlign: 'right' }}>
               <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Matricule</p>
               <p style={{ fontSize: 15, fontWeight: 700, color: '#1e3a8a' }}>{user.matricule}</p>
             </div>
@@ -309,7 +278,7 @@ export default function ProfilePage() {
             </form>
           </div>
         </div>
-      </div>
     </div>
+     </div>
   )
 }

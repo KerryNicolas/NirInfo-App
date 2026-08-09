@@ -1,8 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Sidebar    from '../../components/Sidebar'
-import ModuleTab  from './ModuleTab'
-import SessionTab from './SessionTab'
-import HoraireTab from './HoraireForm'
+import ModuleTab  from './Module/ModuleTab'
+import SessionTab from './Session/SessionTab'
+import HoraireTab from './Session/HoraireForm'
 
 export default function FormationPage() {
   return (

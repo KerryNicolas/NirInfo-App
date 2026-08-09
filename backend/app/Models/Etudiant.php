@@ -24,12 +24,13 @@ class Etudiant extends Model
         'matricule_s',
     ];
 
+    protected $appends = ['photo_url'];
+
     /* ── Accesseur photo URL ── */
     public function getPhotoUrlAttribute(): ?string
     {
-        return $this->photo_etudiant
-            ? url('storage/photos/' . $this->photo_etudiant)
-            : null;
+        $photo = $this->attributes['photo'] ?? $this->attributes['photo_etudiant'] ?? null;
+        return $photo ? url('storage/photos/' . $photo) : null;
     }
 
     /* ── Relation salarié (éditeur) ── */

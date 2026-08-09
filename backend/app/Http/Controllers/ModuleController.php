@@ -37,6 +37,8 @@ class ModuleController extends BaseApiController
             'code_module'        => strtoupper(trim($request->code_module)),
             'nom_module'         => $request->nom,
             'description_module' => $request->description ?? '',
+            // ── FIX : capture de l'éditeur, absente jusqu'ici ──
+            'matricule_s'        => auth()->user()->matricule ?? null,
         ]);
 
         return $this->ok('Module créé avec succès', [], 201);

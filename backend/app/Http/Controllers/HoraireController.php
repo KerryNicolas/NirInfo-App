@@ -34,6 +34,8 @@ class HoraireController extends BaseApiController
             'designation_horaire' => $request->designation,
             'description_horaire' => $request->horaire  ?? '',
             'remarque_horaire'    => $request->remarque ?? '',
+            // ── FIX : capture de l'éditeur, absente jusqu'ici ──
+            'matricule_s'         => auth()->user()->matricule ?? null,
         ]);
         return $this->ok('Horaire créé avec succès', [], 201);
     }

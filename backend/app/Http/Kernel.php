@@ -23,7 +23,14 @@ class Kernel extends HttpKernel
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
         'api' => [
-            // ThrottleRequests SUPPRIMÉ — causait les erreurs 429
+            // FIX : requis pour que les requêtes venant du frontend SPA (avec cookie
+            // de session) soient reconnues comme authentifiées par auth:sanctum.
+            // Sans ce middleware, seul un vrai Bearer token fonctionnerait — impossible
+            // de passer à l'auth par cookie httpOnly sans lui.
+            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            // Throttle toujours volontairement absent ici (cf. commentaire d'origine
+            // sur les erreurs 429) — le throttle est réappliqué route par route
+            // dans routes/api.php pour login/forgot-password/reset-password.
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
     ];
@@ -40,5 +47,6 @@ class Kernel extends HttpKernel
         'signed'           => \Illuminate\Routing\Middleware\ValidateSignature::class,
         'throttle'         => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified'         => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+        'permission'       => \App\Http\Middleware\CheckPermission::class,
     ];
 }

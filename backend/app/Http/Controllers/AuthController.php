@@ -4,8 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -13,41 +14,7 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     /* ══════════════════════════════════════
-     | REGISTER
-     ══════════════════════════════════════ */
-    public function register(Request $request)
-    {
-        $request->validate([
-            'name'     => 'required|string|max:255',
-            'email'    => 'required|string|email|unique:users',
-            'password' => 'required|string|min:6|confirmed',
-        ]);
-
-        // Vérification email déjà utilisé (réponse explicite)
-        if (User::where('email', $request->email)->exists()) {
-            return response()->json([
-                'message' => 'Cette adresse email est déjà associée à un compte.',
-                'errors'  => ['email' => ['Cette adresse email est déjà utilisée.']],
-            ], 422);
-        }
-
-        $user = User::create([
-            'name'     => $request->name,
-            'email'    => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
-
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'user'    => $user,
-            'token'   => $token,
-            'message' => 'Compte créé avec succès.',
-        ], 201);
-    }
-
-    /* ══════════════════════════════════════
-     | LOGIN
+     | LOGIN — authentification par session + cookie httpOnly
      ══════════════════════════════════════ */
     public function login(Request $request)
     {
@@ -56,19 +23,28 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        if (!Auth::attempt($request->only('email', 'password'), $request->boolean('remember'))) {
+            // Audit — trace les tentatives échouées (email tenté + IP), sans jamais logger le mot de passe
+            Log::warning('Échec de connexion', [
+                'email' => $request->email,
+                'ip'    => $request->ip(),
+            ]);
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Les identifiants sont incorrects.'],
             ]);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // Régénère l'ID de session — empêche la fixation de session
+        $request->session()->regenerate();
+
+        $user = Auth::user();
+        $user->load('roleRelation.permissions');
+
+        Log::info('Connexion réussie', ['user_id' => $user->id, 'ip' => $request->ip()]);
 
         return response()->json([
-            'user'  => $user,
-            'token' => $token,
+            'user' => $this->formatUser($user),
         ]);
     }
 
@@ -77,20 +53,68 @@ class AuthController extends Controller
      ══════════════════════════════════════ */
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $userId = $request->user()?->id;
+
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        Log::info('Déconnexion', ['user_id' => $userId, 'ip' => $request->ip()]);
+
         return response()->json(['message' => 'Déconnexion réussie']);
     }
 
     /* ══════════════════════════════════════
-     | ME
+     | ME — restaure la session au chargement de l'app
      ══════════════════════════════════════ */
     public function me(Request $request)
     {
-        return response()->json($request->user());
+        $user = $request->user();
+        $user->load('roleRelation.permissions');
+
+        return response()->json($this->formatUser($user));
     }
 
     /* ══════════════════════════════════════
-     | FORGOT PASSWORD — envoi du lien
+     | CREATE USER — remplace l'ancien /register public. Réservé admin.
+     ══════════════════════════════════════ */
+    public function createUser(Request $request)
+    {
+        if ($request->user()->roleRelation?->slug !== 'admin') {
+            return response()->json([
+                'message' => "Seul un administrateur peut créer un compte.",
+            ], 403);
+        }
+
+        $request->validate([
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|string|email|unique:users',
+            'password' => 'required|string|min:8|confirmed',
+            'role_id'  => 'required|integer|exists:roles,id',
+        ]);
+
+        $user = User::create([
+            'name'     => $request->name,
+            'email'    => $request->email,
+            'password' => Hash::make($request->password),
+            'role_id'  => $request->role_id,
+        ]);
+
+        $user->load('roleRelation.permissions');
+
+        Log::info('Compte créé', [
+            'created_user_id' => $user->id,
+            'created_by'      => $request->user()->id,
+        ]);
+
+        return response()->json([
+            'user'    => $this->formatUser($user),
+            'message' => 'Compte créé avec succès.',
+        ], 201);
+    }
+
+    /* ══════════════════════════════════════
+     | FORGOT PASSWORD
      ══════════════════════════════════════ */
     public function forgotPassword(Request $request)
     {
@@ -100,14 +124,15 @@ class AuthController extends Controller
             'email.exists' => 'Aucun compte n\'est associé à cette adresse email.',
         ]);
 
-        $status = Password::sendResetLink(
-            $request->only('email')
-        );
+        $status = Password::sendResetLink($request->only('email'));
+
+        Log::info('Demande de réinitialisation de mot de passe', [
+            'email' => $request->email,
+            'ip'    => $request->ip(),
+        ]);
 
         if ($status === Password::RESET_LINK_SENT) {
-            return response()->json([
-                'message' => 'Lien de réinitialisation envoyé par email.',
-            ]);
+            return response()->json(['message' => 'Lien de réinitialisation envoyé par email.']);
         }
 
         return response()->json([
@@ -116,7 +141,7 @@ class AuthController extends Controller
     }
 
     /* ══════════════════════════════════════
-     | RESET PASSWORD — nouveau mot de passe
+     | RESET PASSWORD
      ══════════════════════════════════════ */
     public function resetPassword(Request $request)
     {
@@ -138,9 +163,7 @@ class AuthController extends Controller
         );
 
         if ($status === Password::PASSWORD_RESET) {
-            return response()->json([
-                'message' => 'Mot de passe réinitialisé avec succès.',
-            ]);
+            return response()->json(['message' => 'Mot de passe réinitialisé avec succès.']);
         }
 
         return response()->json([
@@ -149,7 +172,7 @@ class AuthController extends Controller
     }
 
     /* ══════════════════════════════════════
-     | UPDATE PROFILE — infos + mot de passe
+     | UPDATE PROFILE
      ══════════════════════════════════════ */
     public function updateProfile(Request $request)
     {
@@ -164,7 +187,6 @@ class AuthController extends Controller
             'password_confirmation' => 'required_with:password',
         ]);
 
-        // Vérifier l'ancien mot de passe si changement demandé
         if ($request->filled('password')) {
             if (!Hash::check($request->current_password, $user->password)) {
                 return response()->json([
@@ -174,19 +196,33 @@ class AuthController extends Controller
             }
         }
 
-        // Mise à jour infos
         $user->fill($request->only(['name', 'email', 'phone']));
 
-        // Mise à jour mot de passe si fourni
         if ($request->filled('password')) {
             $user->password = Hash::make($request->password);
+            Log::info('Mot de passe modifié', ['user_id' => $user->id]);
         }
 
         $user->save();
+        $user->load('roleRelation.permissions');
 
         return response()->json([
-            'user'    => $user->fresh(),
+            'user'    => $this->formatUser($user->fresh()->load('roleRelation.permissions')),
             'message' => 'Profil mis à jour avec succès.',
         ]);
+    }
+
+    /* ══════════════════════════════════════
+     | HELPER
+     ══════════════════════════════════════ */
+    private function formatUser(User $user): array
+    {
+        $data = $user->toArray();
+        unset($data['role_relation']);
+
+        $data['role_slug']   = $user->roleRelation?->slug;
+        $data['permissions'] = $user->roleRelation?->permissions->pluck('slug') ?? [];
+
+        return $data;
     }
 }
