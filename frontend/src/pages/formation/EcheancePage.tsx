@@ -49,14 +49,15 @@ function DetailModal({ r, onClose }: { r: Echeance; onClose: () => void }) {
 
 export default function EcheancePage() {
   const [date, setDate]             = useState(today)
-  const [activeParams, setActiveParams] = useState<Record<string,string>>({})
   const [totalAPercevoir, setTotalAPercevoir] = useState(0)
   const [searched, setSearched]     = useState(false)
   const [viewing, setViewing]       = useState<Echeance | null>(null)
 
+  // FIX : plus de "params: activeParams" ici — ce champ n'est lu qu'au montage par
+  // useTable, il ne réagit jamais à un changement de state côté page (c'était la
+  // cause du bug : le filtre "date" ne parvenait jamais réellement au hook).
   const table = useTable<Echeance>('/echeances', {
     perPage: 15,
-    params: activeParams,
     autoLoad: false,
   })
 
@@ -65,14 +66,15 @@ export default function EcheancePage() {
     if (date) params.date = date
 
     setSearched(true)
+    // FIX : setParams() est la méthode du hook faite pour ça — elle met à jour le
+    // filtre EN INTERNE et déclenche le bon fetch, contrairement à l'ancien
+    // setActiveParams() + setTimeout(reload) qui ne synchronisaient rien.
+    table.setParams(params)
 
     try {
       const r = await api.get('/echeances', { params: { ...params, per_page: 15, page: 1 } })
       setTotalAPercevoir(r.data.total_a_percevoir ?? 0)
     } catch { setTotalAPercevoir(0) }
-
-    setActiveParams(params)
-    setTimeout(() => table.reload(), 50)
   }, [date, table])
 
   const exportExcel = () => {

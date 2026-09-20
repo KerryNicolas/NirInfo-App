@@ -3,7 +3,9 @@ import api from '../../api/axios'
 import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
-import { IcoPlus, IcoTrash, IcoSearch } from '../../components/icons'
+import ConfirmDialog from '../../components/ConfirmDialog'
+import { IcoPlus, IcoEdit, IcoSave, IcoTrash, IcoSearch, IcoX } from '../../components/icons'
+import { formatMontantInput, parseMontantInput } from '../../utils/validators'
 
 interface Transfer {
   id_transfer: number; starting_account: number; destination_account: number; amount: number
@@ -19,6 +21,11 @@ export default function TransferTab() {
   const [comptes, setComptes] = useState<Compte[]>([])
   const [form,    setForm]    = useState(EMPTY)
   const [saving,  setSaving]  = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+  // FIX (point 9) : ajout de la modification — le backend expose maintenant
+  // PUT /transferts/{id} (TransferController::update), qui annule l'ancien
+  // mouvement avant d'appliquer le nouveau (aucune double comptabilisation).
+  const [editing, setEditing] = useState<Transfer | null>(null)
 
   useEffect(() => {
     api.get('/comptes-budget/simple').then(r => setComptes(r.data ?? [])).catch(() => {})
@@ -26,6 +33,18 @@ export default function TransferTab() {
 
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }))
+
+  const handleEdit = (t: Transfer) => {
+    setEditing(t)
+    setForm({
+      starting_account: String(t.starting_account),
+      destination_account: String(t.destination_account),
+      amount: formatMontantInput(String(t.amount)),
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const resetForm = () => { setForm(EMPTY); setEditing(null) }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,25 +54,35 @@ export default function TransferTab() {
     }
     setSaving(true)
     try {
-      await api.post('/transferts', form)
-      toast.success('Virement effectué avec succès')
-      setForm(EMPTY)
+      // FIX : le champ Montant est saisi formaté ("1 000 000") pour
+      // l'affichage — on renvoie la valeur numérique brute à l'API.
+      const payload = { ...form, amount: parseMontantInput(form.amount) }
+      if (editing) {
+        await api.put(`/transferts/${editing.id_transfer}`, payload)
+        toast.success('Virement mis à jour avec succès')
+      } else {
+        await api.post('/transferts', payload)
+        toast.success('Virement effectué avec succès')
+      }
+      resetForm()
       table.reload()
     } catch (err: any) { toast.error(err.response?.data?.message || "Erreur lors du virement") }
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer ce virement ?')) return
-    try { await api.delete(`/transferts/${id}`); toast.success('Virement supprimé'); table.reload() }
+  const handleDelete = async () => {
+    if (!confirmDeleteId) return
+    try { await api.delete(`/transferts/${confirmDeleteId}`); toast.success('Virement supprimé'); table.reload() }
     catch { toast.error('Erreur lors de la suppression') }
+    finally { setConfirmDeleteId(null) }
   }
 
   return (
     <>
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-header">
-          <span className="card-title" style={{ display:'flex', alignItems:'center', gap:7 }}><IcoPlus /> Nouveau virement</span>
+          <span className="card-title" style={{ display:'flex', alignItems:'center', gap:7 }}>{editing ? <IcoEdit /> : <IcoPlus />} {editing ? 'Modifier le virement' : 'Nouveau virement'}</span>
+          {editing && <button type="button" className="btn btn-sm" onClick={resetForm} style={{ display:'flex', alignItems:'center', gap:5, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca' }}><IcoX /> Annuler</button>}
         </div>
         <div className="card-body">
           <form onSubmit={handleSubmit}>
@@ -75,10 +104,10 @@ export default function TransferTab() {
             </div>
             <div className="form-group">
               <label className="form-label">Montant </label>
-              <input className="form-control" type="number" value={form.amount} onChange={set('amount')} required />
+              <input className="form-control" type="text" inputMode="numeric" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: formatMontantInput(e.target.value) }))} required placeholder="Ex: 100 000" />
             </div>
             <button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:6 }} disabled={saving}>
-              {saving ? <><span className="spinner" style={{ width:14, height:14, borderWidth:2 }} /> Enregistrement…</> : <><IcoPlus /> Enregistrer</>}
+              {saving ? <><span className="spinner" style={{ width:14, height:14, borderWidth:2 }} /> Enregistrement…</> : editing ? <><IcoSave /> Mettre à jour</> : <><IcoPlus /> Enregistrer</>}
             </button>
           </form>
         </div>
@@ -110,7 +139,8 @@ export default function TransferTab() {
                     <td style={{ fontSize:12 }}>{t.destination_libelle}</td>
                     <td style={{ fontWeight:600, color:'#2563eb' }}>{fmt(t.amount)} Ar</td>
                     <td><div className="table-actions">
-                      <button className="btn-icon delete" onClick={() => handleDelete(t.id_transfer)}><IcoTrash /></button>
+                      <button className="btn-icon edit" onClick={() => handleEdit(t)}><IcoEdit /></button>
+                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(t.id_transfer)}><IcoTrash /></button>
                     </div></td>
                   </tr>
                 ))}
@@ -120,6 +150,15 @@ export default function TransferTab() {
         </div>
         {!table.loading && table.meta.total > 0 && <Pagination meta={table.meta} onPage={table.setPage} onPerPage={table.setPerPage} />}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="Supprimer ce virement ?"
+        message="Ce virement sera définitivement supprimé et les soldes des comptes concernés seront automatiquement réajustés."
+        confirmLabel="Supprimer"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </>
   )
 }

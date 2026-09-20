@@ -1,27 +1,37 @@
 <?php
 namespace App\Http\Controllers;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
     public function stats()
     {
         try {
-            $totalEtudiants   = DB::table('etudiant')->count();
-            
-            $sessionsActives  = DB::table('session')
+            // FIX PERFORMANCE : whereMonth()/whereYear() appliquent une fonction
+            // SQL sur la colonne date_paiement, ce qui empêche MySQL d'utiliser
+            // un index dessus (obligé de scanner toute la table ligne par ligne
+            // pour évaluer MONTH()/YEAR() sur chaque ligne). Une comparaison de
+            // plage (>= début du mois, < début du mois suivant) permet à MySQL
+            // d'utiliser un index normal sur date_paiement — bien plus rapide
+            // si la table inscription contient beaucoup de lignes.
+            $debutMois  = Carbon::now()->startOfMonth()->toDateString();
+            $finMois    = Carbon::now()->addMonthNoOverflow()->startOfMonth()->toDateString();
+
+            $totalEtudiants  = DB::table('etudiant')->count();
+
+            $sessionsActives = DB::table('session')
                                   ->where('fin_session', '>=', now()->toDateString())
                                   ->count();
-            
-            $inscriptionsMois = DB::table('inscription')
-                                  ->whereMonth('date_paiement', now()->month)
-                                  ->whereYear('date_paiement',  now()->year)
-                                  ->count();
-            
-            $revenusMois      = DB::table('inscription')
-                                  ->whereMonth('date_paiement', now()->month)
-                                  ->whereYear('date_paiement',  now()->year)
-                                  ->sum('montant_paye');
+
+            // FIX : count + sum du mois fusionnés en UNE seule requête au lieu
+            // de deux — un seul aller-retour SQL au lieu de deux pour la même
+            // plage de lignes.
+            $moisAgg = DB::table('inscription')
+                ->where('date_paiement', '>=', $debutMois)
+                ->where('date_paiement', '<',  $finMois)
+                ->selectRaw('COUNT(*) as inscriptions_mois, COALESCE(SUM(montant_paye),0) as revenus_mois')
+                ->first();
 
             $dernieres = DB::table('inscription as i')
                 ->join('etudiant as e', 'i.matricule_etudiant', '=', 'e.matricule_etudiant')
@@ -42,8 +52,8 @@ class DashboardController extends Controller
                 'stats' => [
                     'total_etudiants'   => $totalEtudiants,
                     'sessions_actives'  => $sessionsActives,
-                    'inscriptions_mois' => $inscriptionsMois,
-                    'revenus_mois'      => $revenusMois,
+                    'inscriptions_mois' => $moisAgg->inscriptions_mois ?? 0,
+                    'revenus_mois'      => $moisAgg->revenus_mois ?? 0,
                 ],
                 'dernieres_inscriptions' => $dernieres,
             ]);

@@ -3,7 +3,9 @@ import api from '../../api/axios'
 import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX, IcoInfo } from '../../components/icons'
+import { formatNumeroCompte, isValidNumeroCompte, invalidFieldStyle } from '../../utils/validators'
 
 interface Compte { id_compte: number; account_number: string; libelle: string; montant: number; editeur: string }
 const EMPTY = { account_number: '', libelle: '' }
@@ -30,6 +32,7 @@ export default function CompteTab() {
   const [form,    setForm]    = useState(EMPTY)
   const [saving,  setSaving]  = useState(false)
   const [showEditeur, setShowEditeur] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
   const reset = () => { setForm(EMPTY); setEditing(null) }
 
@@ -43,7 +46,13 @@ export default function CompteTab() {
     setForm(p => ({ ...p, [k]: e.target.value }))
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true)
+    e.preventDefault()
+    // FIX : même règle de validation/formatage que le téléphone.
+    if (form.account_number && !isValidNumeroCompte(form.account_number)) {
+      toast.error('Numéro de compte invalide — 10 chiffres, préfixe 032 à 038 (ex: 034 12 345 67)')
+      return
+    }
+    setSaving(true)
     try {
       if (editing) { await api.put(`/comptes-budget/${editing.id_compte}`, form); toast.success('Compte mis à jour') }
       else         { await api.post('/comptes-budget', form); toast.success('Compte créé avec succès') }
@@ -52,10 +61,16 @@ export default function CompteTab() {
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer ce compte ?')) return
-    try { await api.delete(`/comptes-budget/${id}`); toast.success('Compte supprimé'); table.reload() }
-    catch { toast.error('Erreur suppression') }
+  const handleDelete = async () => {
+    if (!confirmDeleteId) return
+    try { await api.delete(`/comptes-budget/${confirmDeleteId}`); toast.success('Compte supprimé'); table.reload() }
+    // FIX : affiche maintenant le vrai message renvoyé par le backend au
+    // lieu d'un "Erreur suppression" générique — même correctif que sur
+    // EtudiantTab. Si le compte a des transactions/prestations/virements
+    // liés, l'erreur réelle (contrainte de clé étrangère ou blocage
+    // applicatif) apparaîtra ici au lieu d'être masquée.
+    catch (err: any) { toast.error(err.response?.data?.message || 'Erreur lors de la suppression') }
+    finally { setConfirmDeleteId(null) }
   }
 
   return (
@@ -63,14 +78,18 @@ export default function CompteTab() {
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-header">
           <span className="card-title" style={{ display:'flex', alignItems:'center', gap:7 }}>{editing ? <IcoEdit /> : <IcoPlus />} {editing ? 'Modifier le compte' : 'Nouveau compte'}</span>
-          {editing && <button className="btn btn-secondary btn-sm" onClick={reset} style={{ display:'flex', alignItems:'center', gap:5 }}><IcoX /> Annuler</button>}
+          {/* FIX : style harmonisé avec le bouton Annuler d'Étudiant */}
+          {editing && <button className="btn btn-sm" onClick={reset} style={{ display:'flex', alignItems:'center', gap:5, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca' }}><IcoX /> Annuler</button>}
         </div>
         <div className="card-body">
           <form onSubmit={handleSubmit}>
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Numéro de compte </label>
-                <input className="form-control" value={form.account_number} onChange={set('account_number')} required placeholder="Ex: 034 XX XXX XX" />
+                {/* FIX : formatage automatique "03X XX XXX XX" */}
+                <input className="form-control" value={form.account_number} onChange={e => setForm(p => ({ ...p, account_number: formatNumeroCompte(e.target.value) }))}
+                  style={form.account_number && !isValidNumeroCompte(form.account_number) ? invalidFieldStyle : undefined}
+                  required placeholder="Ex: 034 12 345 67" maxLength={13} />
               </div>
               <div className="form-group">
                 <label className="form-label">Libellé </label>
@@ -112,7 +131,7 @@ export default function CompteTab() {
                     <td><div className="table-actions">
                       <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(c.editeur)}><IcoInfo /></button>
                       <button className="btn-icon edit" onClick={() => handleEdit(c)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => handleDelete(c.id_compte)}><IcoTrash /></button>
+                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(c.id_compte)}><IcoTrash /></button>
                     </div></td>
                   </tr>
                 ))}
@@ -124,6 +143,15 @@ export default function CompteTab() {
       </div>
 
       {showEditeur !== null && <EditeurPopover editeur={showEditeur} onClose={() => setShowEditeur(null)} />}
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="Supprimer ce compte ?"
+        message="Ce compte sera définitivement supprimé. Cette action est irréversible."
+        confirmLabel="Supprimer"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </>
   )
 }

@@ -134,9 +134,39 @@ class GererController extends BaseApiController
         }
     }
 
+    // FIX : la suppression annulait la transaction sans jamais réajuster le
+    // solde du compte concerné — un dépôt supprimé laissait le montant
+    // "gagné" dans le solde, un retrait supprimé laissait le solde amputé
+    // pour rien. On applique ici le même principe que update() : on annule
+    // d'abord l'effet de l'opération sur le compte, puis seulement on
+    // supprime la ligne, le tout dans une transaction DB pour rester
+    // cohérent en cas d'erreur.
     public function destroy($id)
     {
-        DB::table('transaction')->where('id_transaction', $id)->delete();
-        return $this->ok('Supprimé avec succès');
+        $original = DB::table('transaction')->where('id_transaction', $id)->first();
+        if (!$original) {
+            return $this->err('Opération non trouvée', 404);
+        }
+
+        DB::beginTransaction();
+        try {
+            // Annule l'effet de l'opération sur le solde du compte :
+            // un dépôt (E) avait augmenté le solde -> on le décrémente,
+            // un retrait (S) avait diminué le solde -> on l'incrémente.
+            if ($original->transaction_type === 'E') {
+                DB::table('compte')->where('id_compte', $original->account)->decrement('montant', $original->amount);
+            } else {
+                DB::table('compte')->where('id_compte', $original->account)->increment('montant', $original->amount);
+            }
+
+            DB::table('transaction')->where('id_transaction', $id)->delete();
+
+            DB::commit();
+            return $this->ok('Supprimé avec succès — le solde du compte a été réajusté');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Erreur lors de la suppression', 'error' => $e->getMessage()], 500);
+        }
     }
 }

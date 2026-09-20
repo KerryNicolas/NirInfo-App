@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
@@ -24,7 +25,6 @@ class AuthController extends Controller
         ]);
 
         if (!Auth::attempt($request->only('email', 'password'), $request->boolean('remember'))) {
-            // Audit — trace les tentatives échouées (email tenté + IP), sans jamais logger le mot de passe
             Log::warning('Échec de connexion', [
                 'email' => $request->email,
                 'ip'    => $request->ip(),
@@ -35,7 +35,6 @@ class AuthController extends Controller
             ]);
         }
 
-        // Régénère l'ID de session — empêche la fixation de session
         $request->session()->regenerate();
 
         $user = Auth::user();
@@ -87,18 +86,53 @@ class AuthController extends Controller
         }
 
         $request->validate([
-            'name'     => 'required|string|max:255',
+            'nom'      => 'required|string|max:255',
+            'prenom'   => 'required|string|max:255',
             'email'    => 'required|string|email|unique:users',
             'password' => 'required|string|min:8|confirmed',
             'role_id'  => 'required|integer|exists:roles,id',
         ]);
 
-        $user = User::create([
-            'name'     => $request->name,
-            'email'    => $request->email,
-            'password' => Hash::make($request->password),
-            'role_id'  => $request->role_id,
-        ]);
+        DB::beginTransaction();
+        try {
+            // FIX : génère automatiquement un matricule salarié et crée la
+            // ligne `salarie` correspondante — sans ça, le champ "Éditeur"
+            // affiché partout dans l'appli (Module, Session, Achat, etc.)
+            // reste vide pour ce compte, faute de ligne à joindre via
+            // matricule_s. S'applique à tout nouveau compte, quel que soit
+            // son rôle (admin ou gestionnaire) — le bug touchait tous les
+            // comptes de la même façon, pas seulement Admin.
+            $year = date('Y');
+            $last = DB::table('salarie')
+                ->where('matricule_s', 'like', "S-{$year}-%")
+                ->orderByDesc('matricule_s')
+                ->value('matricule_s');
+            $seq = 1;
+            if ($last) {
+                $parts = explode('-', $last);
+                $seq = ((int) end($parts)) + 1;
+            }
+            $matriculeS = "S-{$year}-" . str_pad($seq, 3, '0', STR_PAD_LEFT);
+
+            DB::table('salarie')->insert([
+                'matricule_s' => $matriculeS,
+                'nom_s'       => strtoupper($request->nom),
+                'prenom_s'    => $request->prenom,
+            ]);
+
+            $user = User::create([
+                'name'      => $request->nom . ' ' . $request->prenom,
+                'email'     => $request->email,
+                'password'  => Hash::make($request->password),
+                'role_id'   => $request->role_id,
+                'matricule' => $matriculeS,
+            ]);
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Erreur lors de la création du compte', 'error' => $e->getMessage()], 500);
+        }
 
         $user->load('roleRelation.permissions');
 

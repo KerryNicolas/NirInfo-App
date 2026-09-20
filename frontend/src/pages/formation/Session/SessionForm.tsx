@@ -2,17 +2,19 @@ import { useEffect, useState } from 'react'
 import api from '../../../api/axios'
 import toast from 'react-hot-toast'
 import { useTable } from '../../../hooks/useTable'
+import { useModuleSuggestions } from '../../../hooks/useModuleSuggestions'
 import Pagination from '../../../components/Pagination'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../../components/icons'
+import { formatMontantInput, parseMontantInput } from '../../../utils/validators'
 
 interface Session {
   code_session: string; date_debut: string; date_fin: string
   date_echeance: string; horaire_description: string
-  frais_formation: number; module_nom: string
+  frais_formation: number; module_nom: string; code_module: string; code_horaire: string
   editeur: string; formateur_nom: string; lieu: string
 }
 interface Horaire { code_horaire: string; designation: string; horaire: string }
-interface Module  { code_module: string; nom: string }
 
 const EMPTY = { date_debut:'', date_fin:'', date_echeance:'', code_horaire:'', code_module:'', frais_formation:'', lieu:'Ampandrana', id_formateur:'' }
 
@@ -28,22 +30,28 @@ const DEFAULT_HORAIRES: Horaire[] = [
 export default function SessionForm() {
   const table    = useTable<Session>('/sessions', { perPage: 15 })
   const [horaires, setHoraires] = useState<Horaire[]>([])
-  const [modules,  setModules]  = useState<Module[]>([])
   const [form,     setForm]     = useState(EMPTY)
   const [editing,  setEditing]  = useState<Session | null>(null)
   const [saving,   setSaving]   = useState(false)
+  const [confirmDeleteCode, setConfirmDeleteCode] = useState<string | null>(null)
+
+  // FIX : Module en autocomplétion — corrige le bug où le <select> ne
+  // chargeait que 15 modules sur 65 (pas de per_page envoyé côté fetch initial).
+  const [moduleQuery, setModuleQuery] = useState('')
+  const moduleSuggestions = useModuleSuggestions(moduleQuery)
 
   useEffect(() => {
-    Promise.all([api.get('/horaires'), api.get('/modules')]).then(([hr, mr]) => {
-      setHoraires(hr.data.data ?? [])
-      setModules(mr.data.data ?? [])
-    }).catch(() => {})
+    // Horaires : peu nombreux (6 par défaut + quelques personnalisés),
+    // per_page élevé suffit largement, pas besoin d'autocomplétion ici.
+    api.get('/horaires', { params: { per_page: 100 } })
+      .then(r => setHoraires(r.data.data ?? []))
+      .catch(() => {})
   }, [])
 
   const allHoraires = [...horaires, ...DEFAULT_HORAIRES.filter(d => !horaires.find(h => h.code_horaire === d.code_horaire))]
   const selectedHoraire = allHoraires.find(h => h.code_horaire === form.code_horaire)
 
-  const reset = () => { setForm(EMPTY); setEditing(null) }
+  const reset = () => { setForm(EMPTY); setModuleQuery(''); setEditing(null) }
 
   const handleEdit = (s: Session) => {
     setEditing(s)
@@ -51,12 +59,13 @@ export default function SessionForm() {
       date_debut:      s.date_debut      || '',
       date_fin:        s.date_fin        || '',
       date_echeance:   s.date_echeance   || '',
-      code_horaire:    s.horaire_description || '',
-      code_module:     s.module_nom      || '',
-      frais_formation: String(s.frais_formation) || '',
+      code_horaire:    s.code_horaire    || '',
+      code_module:     s.code_module     || '',
+      frais_formation: formatMontantInput(String(s.frais_formation)) || '',
       lieu:            s.lieu            || 'Ampandrana',
       id_formateur:    '',
     })
+    setModuleQuery(s.module_nom || '')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -67,21 +76,28 @@ export default function SessionForm() {
     e.preventDefault(); setSaving(true)
     try {
       if (editing) {
-        await api.put(`/sessions/${editing.code_session}`, { date_debut: form.date_debut, date_fin: form.date_fin, date_echeance: form.date_echeance, frais_formation: form.frais_formation })
+        // FIX : code_horaire, code_module et lieu sont maintenant envoyés en
+        // édition — jamais code_session lui-même (voir commentaire backend).
+        await api.put(`/sessions/${editing.code_session}`, {
+          date_debut: form.date_debut, date_fin: form.date_fin, date_echeance: form.date_echeance,
+          frais_formation: parseMontantInput(form.frais_formation), code_horaire: form.code_horaire,
+          code_module: form.code_module, lieu: form.lieu,
+        })
         toast.success('Session mise à jour'); reset()
       } else {
-        await api.post('/sessions', { ...form, id_formateur: form.id_formateur || undefined })
-        toast.success('Session créée avec succès'); setForm(EMPTY)
+        await api.post('/sessions', { ...form, frais_formation: parseMontantInput(form.frais_formation), id_formateur: form.id_formateur || undefined })
+        toast.success('Session créée avec succès'); setForm(EMPTY); setModuleQuery('')
       }
       table.reload()
     } catch (err: any) { toast.error(err.response?.data?.message || "Erreur lors de l'enregistrement") }
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (code: string) => {
-    if (!confirm(`Supprimer la session "${code}" ?`)) return
-    try { await api.delete(`/sessions/${code}`); toast.success('Session supprimée'); table.reload() }
+  const handleDelete = async () => {
+    if (!confirmDeleteCode) return
+    try { await api.delete(`/sessions/${confirmDeleteCode}`); toast.success('Session supprimée'); table.reload() }
     catch { toast.error('Erreur lors de la suppression') }
+    finally { setConfirmDeleteCode(null) }
   }
 
   const fmt = (n: number) => Number(n).toLocaleString('fr')
@@ -94,7 +110,8 @@ export default function SessionForm() {
             {editing ? <IcoEdit /> : <IcoPlus />}
             {editing ? `Modifier — ${editing.code_session}` : 'Nouvelle session'}
           </span>
-          {editing && <button className="btn btn-secondary btn-sm" onClick={reset} style={{ display:'flex', alignItems:'center', gap:5 }}><IcoX /> Annuler</button>}
+          {/* FIX : style harmonisé avec le bouton Annuler d'Étudiant */}
+          {editing && <button className="btn btn-sm" onClick={reset} style={{ display:'flex', alignItems:'center', gap:5, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca' }}><IcoX /> Annuler</button>}
         </div>
         <div className="card-body">
 
@@ -116,7 +133,9 @@ export default function SessionForm() {
               </div>
               <div className="form-group">
                 <label className="form-label">Horaire</label>
-                <select className="form-control" value={form.code_horaire} onChange={set('code_horaire')} required disabled={!!editing}>
+                {/* FIX : code_horaire modifiable même en édition — sans
+                    risque, ne touche que cette session (pas de cascade). */}
+                <select className="form-control" value={form.code_horaire} onChange={set('code_horaire')} required>
                   <option value="">-- Choisir un horaire --</option>
                   {horaires.filter(h => !DEFAULT_HORAIRES.find(d => d.code_horaire === h.code_horaire)).length > 0 && (
                     <optgroup label="Horaires personnalisés">
@@ -127,7 +146,7 @@ export default function SessionForm() {
                     {allHoraires.filter(h => DEFAULT_HORAIRES.find(d => d.code_horaire === h.code_horaire)).map(h => <option key={h.code_horaire} value={h.code_horaire}>{h.designation} — {h.horaire}</option>)}
                   </optgroup>
                 </select>
-                {selectedHoraire && !editing && (
+                {selectedHoraire && (
                   <div style={{ marginTop:6, padding:'6px 10px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:7, fontSize:12, color:'#1d4ed8', display:'flex', alignItems:'center', gap:6 }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     {selectedHoraire.horaire}
@@ -138,20 +157,41 @@ export default function SessionForm() {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Module </label>
-                <select className="form-control" value={form.code_module} onChange={set('code_module')} required disabled={!!editing}>
-                  <option value="">-- Choisir un module --</option>
-                  {modules.map(m => <option key={m.code_module} value={m.code_module}>{m.nom}</option>)}
-                </select>
+                {/* FIX : autocomplétion au lieu du <select> qui ne chargeait
+                    que 15 des 65 modules. Modifiable même en édition — ne
+                    touche que cette session (code_session jamais recalculé). */}
+                <input
+                  className="form-control"
+                  list="module-suggestions"
+                  value={moduleQuery}
+                  onChange={e => {
+                    const v = e.target.value
+                    setModuleQuery(v)
+                    const match = moduleSuggestions.find(m => m.nom === v)
+                    setForm(p => ({ ...p, code_module: match ? match.code_module : '' }))
+                  }}
+                  required placeholder="Tapez pour rechercher un module…" />
+                <datalist id="module-suggestions">
+                  {moduleSuggestions.map(m => (
+                    <option key={m.code_module} value={m.nom}>{m.code_module}</option>
+                  ))}
+                </datalist>
               </div>
               <div className="form-group">
                 <label className="form-label">Frais de formation (Ar) </label>
-                <input className="form-control" type="number" value={form.frais_formation} onChange={set('frais_formation')} required placeholder="Ex: 100000" />
+                {/* FIX : formatage en direct avec espaces "1 000 000" — type="text" nécessaire, "number" refuse les espaces */}
+                <input className="form-control" type="text" inputMode="numeric" value={form.frais_formation}
+                  onChange={e => setForm(p => ({ ...p, frais_formation: formatMontantInput(e.target.value) }))}
+                  required placeholder="Ex: 100 000" />
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Lieu </label>
-                <select className="form-control" value={form.lieu} onChange={set('lieu')} disabled={!!editing}>
+                {/* FIX : réellement sauvegardé maintenant (colonne
+                    session.lieu ajoutée) — avant, cette valeur était perdue
+                    silencieusement. Modifiable même en édition. */}
+                <select className="form-control" value={form.lieu} onChange={set('lieu')}>
                   <option value="Ampandrana">Ampandrana</option>
                   <option value="Ampefiloha">Ampefiloha</option>
                   <option value="Andravoahangy">Andravoahangy</option>
@@ -159,14 +199,16 @@ export default function SessionForm() {
               </div>
               <div className="form-group">
                 <label className="form-label">ID Formateur</label>
-                <input className="form-control" type="number" value={form.id_formateur} onChange={set('id_formateur')} placeholder="Ex: 4" disabled={!!editing} />
+                {/* FIX : déverrouillé même en édition — même traitement que
+                    les autres champs (lieu, code_horaire, code_module...). */}
+                <input className="form-control" type="number" value={form.id_formateur} onChange={set('id_formateur')} placeholder="Ex: 4" />
               </div>
             </div>
             <button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:6 }} disabled={saving}>
               {saving ? <><span className="spinner" style={{ width:14, height:14, borderWidth:2 }} /> Enregistrement…</> : editing ? <><IcoSave /> Mettre à jour</> : <><IcoPlus /> Enregistrer</>}
             </button>
           </form>
-          
+
         </div>
       </div>
 
@@ -202,7 +244,7 @@ export default function SessionForm() {
                     <td style={{ fontSize:12 }}>{s.lieu ? <span style={{ textTransform:'capitalize' }}>{s.lieu}</span> : <span style={{ color:'#cbd5e1' }}>—</span>}</td>
                     <td><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(s)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => handleDelete(s.code_session)}><IcoTrash /></button>
+                      <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(s.code_session)}><IcoTrash /></button>
                     </div></td>
                   </tr>
                 ))}
@@ -212,6 +254,15 @@ export default function SessionForm() {
         </div>
         {!table.loading && table.meta.total > 0 && <Pagination meta={table.meta} onPage={table.setPage} onPerPage={table.setPerPage} />}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDeleteCode}
+        title="Supprimer cette session ?"
+        message={confirmDeleteCode ? `La session « ${confirmDeleteCode} » sera définitivement supprimée. Cette action est irréversible.` : ''}
+        confirmLabel="Supprimer"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteCode(null)}
+      />
     </>
   )
 }

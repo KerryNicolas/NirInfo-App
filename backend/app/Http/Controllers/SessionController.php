@@ -29,15 +29,20 @@ class SessionController extends BaseApiController
                 'm.nom_module          as module_nom',
                 'h.designation_horaire as horaire_designation',
                 'h.description_horaire as horaire_description',
-                DB::raw("CONCAT(UCASE(LEFT(IFNULL(lieux.lieu_paiement,''),1)), LOWER(SUBSTRING(IFNULL(lieux.lieu_paiement,''),2))) as lieu"),
+                DB::raw("COALESCE(
+                    NULLIF(s.lieu,''),
+                    CONCAT(UCASE(LEFT(IFNULL(lieux.lieu_paiement,''),1)), LOWER(SUBSTRING(IFNULL(lieux.lieu_paiement,''),2)))
+                ) as lieu"),
                 DB::raw("CONCAT(IFNULL(ed.nom_s,''),' ',IFNULL(ed.prenom_s,'')) as editeur"),
                 DB::raw("CONCAT(IFNULL(p.nom_pers,''),' ',IFNULL(p.prenom_pers,'')) as formateur_nom")
             );
 
-        // LIFO : s.id DESC (le plus récent en premier)
+        if ($request->boolean('only_active')) {
+            $query->where('s.fin_session', '>=', now()->toDateString());
+        }
+
         $result  = $this->paginate($query, $request, ['s.code_session','m.nom_module'], 's.id');
         $decoded = json_decode($result->getContent(), true);
-        // Dédupliquer par code_session (leftjoin lieux peut dupliquer)
         $decoded['data'] = collect($decoded['data'])->unique('code_session')->values()->all();
         return response()->json($decoded);
     }
@@ -64,7 +69,7 @@ class SessionController extends BaseApiController
                     DB::raw('IFNULL(ins.nb_inscrits,0) as nb_inscrits'),
                     DB::raw("CONCAT(IFNULL(p.nom_pers,''),' ',IFNULL(p.prenom_pers,'')) as formateur_nom")
                 )
-                ->orderBy('s.debut_session','DESC'); // LIFO
+                ->orderBy('s.debut_session','DESC');
 
             if ($request->filled('module') && $request->module !== 'Tous')
                 $query->where('s.code_module',$request->module);
@@ -98,8 +103,8 @@ class SessionController extends BaseApiController
             'code_horaire'  => $request->code_horaire,
             'code_module'   => $request->code_module,
             'frais_module'  => $request->frais_formation,
+            'lieu'          => $request->lieu ?? null,
             'matricule_f'   => $mf,
-            // ── FIX : capture de l'éditeur, absente jusqu'ici ──
             'matricule_s'   => auth()->user()->matricule ?? null,
         ]);
         return $this->ok('Session créée avec succès', ['code_session'=>$code], 201);
@@ -114,12 +119,26 @@ class SessionController extends BaseApiController
 
     public function update(Request $request, $id)
     {
-        DB::table('session')->where('code_session',$id)->update([
+        $request->validate([
+            'date_debut'      => 'sometimes|required|date',
+            'date_fin'        => 'sometimes|required|date',
+            'code_horaire'    => 'sometimes|required|string|exists:horaire,code_horaire',
+            'code_module'     => 'sometimes|required|string|exists:module,code_module',
+            'frais_formation' => 'sometimes|required|numeric|min:0',
+            'lieu'            => 'sometimes|nullable|string|max:100',
+        ]);
+
+        $data = array_filter([
             'debut_session' => $request->date_debut,
             'fin_session'   => $request->date_fin,
-            'echeance'      => $request->date_echeance ?? null,
+            'echeance'      => $request->has('date_echeance') ? $request->date_echeance : null,
             'frais_module'  => $request->frais_formation,
-        ]);
+            'code_horaire'  => $request->code_horaire,
+            'code_module'   => $request->code_module,
+            'lieu'          => $request->has('lieu') ? $request->lieu : null,
+        ], fn($v) => $v !== null);
+
+        DB::table('session')->where('code_session',$id)->update($data);
         return $this->ok('Session mise à jour avec succès');
     }
 

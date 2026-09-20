@@ -3,7 +3,9 @@ import api from '../../api/axios'
 import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoInfo, IcoSave, IcoX } from '../../components/icons'
+import { formatMontantInput, parseMontantInput } from '../../utils/validators'
 
 interface Gestion {
   id_transaction: number; transaction_type: 'E' | 'S'; amount: number
@@ -35,6 +37,7 @@ export default function GererTab() {
   const [editing, setEditing] = useState<Gestion | null>(null)
   const [saving,  setSaving]  = useState(false)
   const [showEditeur, setShowEditeur] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
   useEffect(() => {
     api.get('/comptes-budget/simple').then(r => setComptes(r.data ?? [])).catch(() => {})
@@ -44,7 +47,7 @@ export default function GererTab() {
 
   const handleEdit = (g: Gestion) => {
     setEditing(g)
-    setForm({ compte: String(g.account), type: g.transaction_type, montant: String(g.amount), raison: g.reson })
+    setForm({ compte: String(g.account), type: g.transaction_type, montant: formatMontantInput(String(g.amount)), raison: g.reson })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -54,11 +57,14 @@ export default function GererTab() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true)
     try {
+      // FIX : le champ Montant est saisi formaté ("1 000 000") pour
+      // l'affichage — on renvoie la valeur numérique brute à l'API.
+      const payload = { ...form, montant: parseMontantInput(form.montant) }
       if (editing) {
-        await api.put(`/gerer/${editing.id_transaction}`, form)
+        await api.put(`/gerer/${editing.id_transaction}`, payload)
         toast.success('Opération mise à jour avec succès')
       } else {
-        await api.post('/gerer', form)
+        await api.post('/gerer', payload)
         toast.success('Opération enregistrée avec succès')
       }
       reset()
@@ -67,10 +73,11 @@ export default function GererTab() {
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer cette opération ?\n\nAttention : le solde du compte ne sera pas réajusté automatiquement.')) return
-    try { await api.delete(`/gerer/${id}`); toast.success('Opération supprimée'); table.reload() }
+  const handleDelete = async () => {
+    if (!confirmDeleteId) return
+    try { await api.delete(`/gerer/${confirmDeleteId}`); toast.success('Opération supprimée'); table.reload() }
     catch { toast.error('Erreur lors de la suppression') }
+    finally { setConfirmDeleteId(null) }
   }
 
   return (
@@ -78,7 +85,8 @@ export default function GererTab() {
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-header">
           <span className="card-title" style={{ display:'flex', alignItems:'center', gap:7 }}>{editing ? <IcoEdit /> : <IcoPlus />} {editing ? "Modifier l'opération" : 'Nouvelle opération'}</span>
-          {editing && <button className="btn btn-secondary btn-sm" onClick={reset} style={{ display:'flex', alignItems:'center', gap:5 }}><IcoX /> Annuler</button>}
+          {/* FIX : style harmonisé avec le bouton Annuler d'Étudiant */}
+          {editing && <button className="btn btn-sm" onClick={reset} style={{ display:'flex', alignItems:'center', gap:5, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca' }}><IcoX /> Annuler</button>}
         </div>
         <div className="card-body">
           <form onSubmit={handleSubmit}>
@@ -101,7 +109,7 @@ export default function GererTab() {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Montant </label>
-                <input className="form-control" type="number" value={form.montant} onChange={set('montant')} required />
+                <input className="form-control" type="text" inputMode="numeric" value={form.montant} onChange={e => setForm(p => ({ ...p, montant: formatMontantInput(e.target.value) }))} required placeholder="Ex: 100 000" />
               </div>
               <div className="form-group">
                 <label className="form-label">Raison </label>
@@ -144,7 +152,7 @@ export default function GererTab() {
                     <td><div className="table-actions">
                       <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(g.editeur)}><IcoInfo /></button>
                       <button className="btn-icon edit" onClick={() => handleEdit(g)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => handleDelete(g.id_transaction)}><IcoTrash /></button>
+                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(g.id_transaction)}><IcoTrash /></button>
                     </div></td>
                   </tr>
                 ))}
@@ -156,6 +164,18 @@ export default function GererTab() {
       </div>
 
       {showEditeur !== null && <EditeurPopover editeur={showEditeur} onClose={() => setShowEditeur(null)} />}
+
+      {/* FIX : le solde du compte est désormais réajusté automatiquement à
+          la suppression (côté backend, GererController::destroy) — message
+          mis à jour en conséquence. */}
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="Supprimer cette opération ?"
+        message="Cette opération sera définitivement supprimée et le solde du compte sera automatiquement réajusté."
+        confirmLabel="Supprimer"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </>
   )
 }

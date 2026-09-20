@@ -16,10 +16,11 @@ class HoraireController extends BaseApiController
                 'h.remarque_horaire    as remarque',
                 DB::raw("CONCAT(IFNULL(s.nom_s,''),' ',IFNULL(s.prenom_s,'')) as editeur")
             );
-        // LIFO par code_horaire
+        // LIFO : h.id DESC (le plus récent en premier) — code_horaire donnait
+        // un tri alphabétique, pas l'ordre de création réel.
         return $this->paginate($query, $request,
             ['h.code_horaire','h.designation_horaire'],
-            'h.code_horaire'
+            'h.id'
         );
     }
 
@@ -52,13 +53,43 @@ class HoraireController extends BaseApiController
 
     public function update(Request $request, $id)
     {
-        $request->validate(['designation'=>'required|string|max:255']);
-        DB::table('horaire')->where('code_horaire',$id)->update([
+        // FIX : code_horaire devient modifiable, même principe que pour
+        // ModuleController::update() — unique() exclut la ligne en cours,
+        // et si le code change réellement, session.code_horaire (référence
+        // confirmée en base) est mis à jour dans la même transaction pour
+        // ne pas rendre orphelines les sessions existantes.
+        $request->validate([
+            'designation'  => 'required|string|max:255',
+            'code_horaire' => 'sometimes|required|string|max:10|unique:horaire,code_horaire,' . $id . ',code_horaire',
+        ]);
+
+        $data = [
             'designation_horaire' => $request->designation,
             'description_horaire' => $request->horaire  ?? '',
             'remarque_horaire'    => $request->remarque ?? '',
-        ]);
-        return $this->ok('Horaire mis à jour avec succès');
+        ];
+
+        $newCode = $id;
+
+        if ($request->filled('code_horaire')) {
+            $normalized = strtoupper(trim($request->code_horaire));
+            if ($normalized !== $id) {
+                $data['code_horaire'] = $normalized;
+                $newCode = $normalized;
+
+                DB::transaction(function () use ($id, $normalized, $data) {
+                    DB::table('session')->where('code_horaire', $id)
+                        ->update(['code_horaire' => $normalized]);
+                    DB::table('horaire')->where('code_horaire', $id)->update($data);
+                });
+
+                return $this->ok('Horaire mis à jour avec succès', ['code_horaire' => $newCode]);
+            }
+        }
+
+        DB::table('horaire')->where('code_horaire', $id)->update($data);
+
+        return $this->ok('Horaire mis à jour avec succès', ['code_horaire' => $newCode]);
     }
 
     public function destroy($id)

@@ -3,25 +3,51 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
   SvgModule, SvgSession, SvgEtudiant, SvgFacture, SvgEtat, SvgEcheance, SvgCertif,
-  SvgRetour, SvgClose, SvgHamburger, SvgSettings, SvgLogout,
-  IcoUsers, IcoServices, IcoStudent, IcoBudget
+  SvgRetour, SvgHamburger, SvgSettings, SvgLogout,
+  IcoUsers, IcoServices, IcoStudent, IcoBudget, IcoCart, IcoCharge, IcoFunc
 } from '.././components/icons'
 
-interface Props { section: 'formation' | 'etudiant' | 'facture' | 'services' | 'budgets' }
+// FIX : un item de menu pointe soit vers une route ("to", géré par NavLink,
+// pour les sections qui ont une page/route par onglet — Formation, Services,
+// Budgets), soit vers un onglet interne à la page ("tab", pour une section
+// comme Logistique qui garde tout dans une seule route et bascule son
+// contenu localement). onTabChange/activeTab ne sont utilisés que dans ce
+// second cas.
+// FIX : flèche pointant vers la gauche pour la fermeture du menu — remplace
+// le "X" (SvgClose) par une icône plus parlante en UX pour un panneau qui
+// se replie vers la gauche. Définie ici en local pour ne pas dépendre d'un
+// ajout dans components/icons.tsx.
+function SvgArrowLeft() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
+  )
+}
 
-// FIX : menus par section — Formation inchangé, Services et Budgets ajoutés
-const formationMenuItems = [
+interface MenuItem { label: string; to?: string; tab?: string; icon: JSX.Element }
+
+interface Props {
+  section: 'formation' | 'etudiant' | 'facture' | 'services' | 'budgets' | 'logistique' | 'personnel'
+  activeTab?: string
+  onTabChange?: (tab: string) => void
+}
+
+// FIX : menus par section — Formation inchangé, Services et Budgets ajoutés,
+// Logistique ajoutée (basée sur des onglets internes, pas des routes).
+const formationMenuItems: MenuItem[] = [
   { label: 'Module',        to: '/formation/module',  icon: <SvgModule /> },
   { label: 'Session',       to: '/formation/session', icon: <SvgSession /> },
   { label: 'Etudiant',      to: '/etudiant/etudiant', icon: <SvgEtudiant /> },
   { label: 'Facture',       to: '/facture',           icon: <SvgFacture /> },
   { label: 'Etat',          to: '/etat',              icon: <SvgEtat /> },
-  { label: 'Echéance',      to: '/echéance',          icon: <SvgEcheance /> },
+  { label: 'Echéance',      to: '/echeance',          icon: <SvgEcheance /> },
   { label: 'Certification', to: '/certification',     icon: <SvgCertif /> },
-  { label: 'Retour',        to: '/dashboard',         icon: <SvgRetour /> },
+  { label: 'Menu Principal',        to: '/dashboard',         icon: <SvgRetour /> },
 ]
 
-const menuItemsBySection: Record<Props['section'], { label: string; to: string; icon: JSX.Element }[]> = {
+const menuItemsBySection: Record<Props['section'], MenuItem[]> = {
   // FIX : formation/etudiant/facture partagent le même menu — le prop "section" ne sert
   // qu'à choisir le titre affiché, jamais à changer le contenu du menu (comportement d'origine)
   formation: formationMenuItems,
@@ -32,27 +58,44 @@ const menuItemsBySection: Record<Props['section'], { label: string; to: string; 
     { label: 'Catalogue',     to: '/services/catalogue',     icon: <IcoServices /> },
     { label: 'Prestation',    to: '/services/prestation',    icon: <IcoStudent /> },
     { label: 'Recouvrement',  to: '/services/recouvrement',  icon: <SvgEcheance /> },
-    { label: 'Retour',        to: '/dashboard',              icon: <SvgRetour /> },
+    { label: 'Menu Principal',        to: '/dashboard',              icon: <SvgRetour /> },
   ],
   budgets: [
     { label: 'Compte',    to: '/budgets/comptes',    icon: <SvgFacture /> },
     { label: 'Gestion',   to: '/budgets/gerer',      icon: <IcoBudget /> },
     { label: 'Virement',  to: '/budgets/transferts', icon: <SvgSession /> },
-    { label: 'Retour',    to: '/dashboard',          icon: <SvgRetour /> },
+    { label: 'Menu Principal',    to: '/dashboard',          icon: <SvgRetour /> },
+  ],
+  // FIX : Logistique n'a qu'une seule route — Achat/Charge sont des onglets
+  // internes (via activeTab/onTabChange), pas des pages séparées. Ces items
+  // n'ont donc pas de "to", sauf le retour au menu principal.
+  logistique: [
+    { label: 'Achat',  tab: 'achat',  icon: <IcoCart /> },
+    { label: 'Charge', tab: 'charge', icon: <IcoCharge /> },
+    { label: 'Menu Principal', to: '/dashboard', icon: <SvgRetour /> },
+  ],
+  // FIX : même principe pour Personnel — Personnel/Fonctions sont des onglets
+  // internes à la page, pas des routes séparées.
+  personnel: [
+    { label: 'Personnel', tab: 'personnel', icon: <IcoUsers /> },
+    { label: 'Fonctions', tab: 'fonction',  icon: <IcoFunc /> },
+    { label: 'Menu Principal', to: '/dashboard', icon: <SvgRetour /> },
   ],
 }
 
 const sectionTitle: Record<Props['section'], string> = {
-  formation: 'Formations',
-  etudiant:  'Formations',
-  facture:   'Formations',
-  services:  'Services',
-  budgets:   'Budgets',
+  formation:  'Formations',
+  etudiant:   'Formations',
+  facture:    'Formations',
+  services:   'Services',
+  budgets:    'Budgets',
+  logistique: 'Logistique',
+  personnel:  'Personnel',
 }
 
 const STORAGE_KEY = 'nirinfo_sidebar_open'
 
-export default function Sidebar({ section }: Props) {
+export default function Sidebar({ section, activeTab, onTabChange }: Props) {
   const { logout } = useAuth()
   const navigate   = useNavigate()
   const menuItems  = menuItemsBySection[section]
@@ -118,37 +161,56 @@ export default function Sidebar({ section }: Props) {
             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.16)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
           >
-            {open ? <SvgClose /> : <SvgHamburger />}
+            {open ? <SvgArrowLeft /> : <SvgHamburger />}
           </button>
         </div>
 
         <nav className="sidebar-nav" style={{ overflow: 'hidden' }}>
           {menuItems.map((m) => {
             const isSeparator = m.label === 'Retour'
+            const navStyle: React.CSSProperties = {
+              justifyContent: open ? 'flex-start' : 'center',
+              padding: open ? '9px 16px' : '9px 0',
+              gap: open ? 10 : 0,
+              transition: 'padding 0.2s, justify-content 0.2s',
+            }
             return (
               <div key={m.label}>
                 {isSeparator && (
                   <div style={{ height: 1, background: 'rgba(255,255,255,0.07)', margin: open ? '6px 16px' : '6px 10px', transition: 'margin 0.2s' }} />
                 )}
-                <NavLink
-                  to={m.to}
-                  className={({ isActive }) => isActive ? 'active' : ''}
-                  title={!open ? m.label : undefined}
-                  style={{
-                    justifyContent: open ? 'flex-start' : 'center',
-                    padding: open ? '9px 16px' : '9px 0',
-                    gap: open ? 10 : 0,
-                    transition: 'padding 0.2s, justify-content 0.2s',
-                  }}
-                >
-                  <span className="nav-icon" style={{ flexShrink: 0 }}>{m.icon}</span>
-                  <span style={{
-                    opacity: open ? 1 : 0, maxWidth: open ? 160 : 0, overflow: 'hidden',
-                    whiteSpace: 'nowrap', transition: 'opacity 0.18s, max-width 0.22s',
-                  }}>
-                    {m.label}
-                  </span>
-                </NavLink>
+                {m.to ? (
+                  <NavLink
+                    to={m.to}
+                    className={({ isActive }) => isActive ? 'active' : ''}
+                    title={!open ? m.label : undefined}
+                    style={navStyle}
+                  >
+                    <span className="nav-icon" style={{ flexShrink: 0 }}>{m.icon}</span>
+                    <span style={{
+                      opacity: open ? 1 : 0, maxWidth: open ? 160 : 0, overflow: 'hidden',
+                      whiteSpace: 'nowrap', transition: 'opacity 0.18s, max-width 0.22s',
+                    }}>
+                      {m.label}
+                    </span>
+                  </NavLink>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => m.tab && onTabChange?.(m.tab)}
+                    className={activeTab === m.tab ? 'active' : ''}
+                    title={!open ? m.label : undefined}
+                    style={navStyle}
+                  >
+                    <span className="nav-icon" style={{ flexShrink: 0 }}>{m.icon}</span>
+                    <span style={{
+                      opacity: open ? 1 : 0, maxWidth: open ? 160 : 0, overflow: 'hidden',
+                      whiteSpace: 'nowrap', transition: 'opacity 0.18s, max-width 0.22s',
+                    }}>
+                      {m.label}
+                    </span>
+                  </button>
+                )}
               </div>
             )
           })}

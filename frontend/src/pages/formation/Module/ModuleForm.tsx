@@ -1,5 +1,5 @@
 import { IcoPlus, IcoEdit, IcoSave, IcoX } from '../../../components/icons'
-
+import { toUpperName } from '../../../utils/validators'
 
 interface ModuleFormData {
   code_module: string
@@ -43,27 +43,39 @@ export default function ModuleForm({ form, editing, saving, onChange, onSubmit, 
     <div className="card" style={{ marginBottom: 20, maxWidth: 1330 }}>
       <div className="card-header">
                 <span className="card-title" style={{ display:'flex', alignItems:'center', gap:7 }}>{editing ? <IcoEdit /> : <IcoPlus />} {editing ? "Modifier le module" : 'Nouveau module'}</span>
-                {editing && <button className="btn btn-secondary btn-sm" onClick={onCancel} style={{ display:'flex', alignItems:'center', gap:5 }}><IcoX /> Annuler</button>}
+                {editing && <button className="btn btn-sm" onClick={onCancel} style={{ display:'flex', alignItems:'center', gap:5, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca' }}><IcoX /> Annuler</button>}
       </div>
 
       <div className="card-body">
         <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           <div className="form-group">
-            <label className="form-label">Code <span style={{ color: '#ef4444' }}>*</span></label>
+            <label className="form-label">Code <span style={{ color: '#ef4444' }}></span></label>
+            {/* FIX : code_module est maintenant modifiable même en édition.
+                ⚠️ Vérifier d'abord qu'aucune autre table (session, etc.) ne
+                référence ce code sans mise à jour en cascade côté backend
+                avant d'utiliser ceci sur de vraies données. */}
             <input className="form-control" value={form.code_module} onChange={onChange('code_module')}
-              required disabled={editing} placeholder="Ex: ACAD"
-              style={{ opacity: editing ? 0.6 : 1, cursor: editing ? 'not-allowed' : 'text' }} />
+              required placeholder="Ex: ACAD" />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Nom <span style={{ color: '#ef4444' }}>*</span></label>
-            <input className="form-control" value={form.nom} onChange={onChange('nom')}
+            {/* FIX : astérisque supprimé — demandé explicitement pour le
+                champ Module (points 1 et 10). Saisie forcée en MAJUSCULES
+                (point 1). Le champ reste obligatoire côté validation
+                (attribut required conservé), seul l'astérisque visuel est
+                retiré. */}
+            <label className="form-label">Module</label>
+            <input className="form-control" value={form.nom}
+              onChange={e => onChange('nom')({ ...e, target: { ...e.target, value: toUpperName(e.target.value) } } as React.ChangeEvent<HTMLInputElement>)}
               required placeholder="Nom du module" />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Description <span style={{ color: '#ef4444' }}>*</span></label>
+            {/* FIX : l'astérisque était affiché ici alors que ce champ n'a
+                jamais été obligatoire (pas d'attribut required, et le
+                backend l'accepte vide) — supprimé (point 10). */}
+            <label className="form-label">Description</label>
             <input className="form-control" value={form.description} onChange={onChange('description')}
               placeholder="Description du module" />
           </div>

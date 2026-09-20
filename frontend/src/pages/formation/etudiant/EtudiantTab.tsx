@@ -2,10 +2,12 @@ import { useRef, useState } from 'react'
 import api from '../../../api/axios'
 import toast from 'react-hot-toast'
 import { toUpper, toTitleCase } from '../../../utils/textFormat'
+import { formatTelephoneMG, isValidTelephoneMG, formatCinMG, isValidCinMG, isValidEmailComFr, isAdult18, invalidFieldStyle } from '../../../utils/validators'
 import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
 import TableSkeleton from '../../../components/TableSkeleton'
 import Avatar from '../../../assets/avatar.jpg'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import { IcoPlus, IcoEdit, IcoCameraModern, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../../components/icons'
 
 interface Etudiant {
@@ -59,7 +61,14 @@ function DetailModal({ e, onClose }: { e: Etudiant; onClose: () => void }) {
   )
 }
 
-export default function EtudiantTab() {
+// FIX : nouvelle prop optionnelle — appelée avec le matricule de l'étudiant
+// quand on clique sur le bouton "+" d'une ligne, pour basculer vers l'onglet
+// Inscription avec ce matricule déjà pré-rempli (voir EtudiantMain.tsx).
+interface EtudiantTabProps {
+  onInscrire?: (matricule: string) => void
+}
+
+export default function EtudiantTab({ onInscrire }: EtudiantTabProps) {
   const table = useTable<Etudiant>('/etudiants', { perPage: 15 })
 
   const [editing,      setEditing]      = useState<Etudiant | null>(null)
@@ -69,6 +78,7 @@ export default function EtudiantTab() {
   const [pendingFile,  setPendingFile]  = useState<File | null>(null)
   const [newMatricule, setNewMatricule] = useState<string | null>(null)
   const [saving,       setSaving]       = useState(false)
+  const [confirmDeleteMat, setConfirmDeleteMat] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const reset = () => {
@@ -119,7 +129,36 @@ export default function EtudiantTab() {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true)
+    e.preventDefault()
+    // FIX : règles de validation métier — voir utils/validators.ts.
+    if (form.telephone && !isValidTelephoneMG(form.telephone)) {
+      toast.error('Téléphone invalide — 10 chiffres, préfixe 032 à 038 (ex: 034 12 345 67)')
+      return
+    }
+    // FIX : Date de naissance et CIN sont désormais obligatoires — un
+    // étudiant doit avoir au moins 18 ans et posséder un CIN pour
+    // s'inscrire (exigence métier).
+    if (!form.date_naissance) {
+      toast.error('La date de naissance est obligatoire')
+      return
+    }
+    if (!isAdult18(form.date_naissance)) {
+      toast.error("L'étudiant doit avoir au moins 18 ans")
+      return
+    }
+    if (!form.numero_cin) {
+      toast.error('Le numéro CIN est obligatoire')
+      return
+    }
+    if (!isValidCinMG(form.numero_cin)) {
+      toast.error('CIN invalide — 12 chiffres exactement (ex: 101 234 567 890)')
+      return
+    }
+    if (form.email && !isValidEmailComFr(form.email)) {
+      toast.error('Email invalide — doit se terminer par .com ou .fr')
+      return
+    }
+    setSaving(true)
     try {
       if (editing) {
         await api.put(`/etudiants/${editing.matricule}`, form)
@@ -143,13 +182,19 @@ export default function EtudiantTab() {
     } finally { setSaving(false) }
   }
 
-  const handleDelete = async (mat: string) => {
-    if (!confirm(`Supprimer l'étudiant ${mat} ?`)) return
+  const handleDelete = async () => {
+    if (!confirmDeleteMat) return
     try {
-      await api.delete(`/etudiants/${mat}`)
+      await api.delete(`/etudiants/${confirmDeleteMat}`)
       toast.success('Étudiant supprimé')
       table.reload()
-    } catch { toast.error('Erreur lors de la suppression') }
+    } catch (err: any) {
+      // FIX : affiche désormais le vrai message du backend (ex: "il a 3
+      // inscription(s)/paiement(s) enregistré(s)") au lieu d'un message
+      // générique qui cachait la vraie raison du blocage.
+      toast.error(err.response?.data?.message || 'Erreur lors de la suppression')
+    }
+    finally { setConfirmDeleteMat(null) }
   }
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -197,9 +242,12 @@ export default function EtudiantTab() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Date de naissance</label>
+                    <label className="form-label">Date de naissance <span style={{ color:'#ef4444' }}></span></label>
+                    {/* FIX : obligatoire — l'étudiant doit avoir au moins 18 ans */}
                     <input className="form-control" type="date" value={form.date_naissance}
-                      onChange={set('date_naissance')} />
+                      onChange={set('date_naissance')}
+                      style={form.date_naissance && !isAdult18(form.date_naissance) ? invalidFieldStyle : undefined}
+                      required />
                   </div>
                 </div>
                 <div className="form-row">
@@ -209,9 +257,12 @@ export default function EtudiantTab() {
                       onChange={e => setForm(p => ({ ...p, lieu_naissance: toTitleCase(e.target.value) }))} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Numéro CIN</label>
+                    <label className="form-label">Numéro CIN <span style={{ color:'#ef4444' }}></span></label>
+                    {/* FIX : obligatoire — formatage automatique "XXX XXX XXX XXX" (12 chiffres) */}
                     <input className="form-control" value={form.numero_cin}
-                      onChange={set('numero_cin')} />
+                      onChange={e => setForm(p => ({ ...p, numero_cin: formatCinMG(e.target.value) }))}
+                      style={form.numero_cin && !isValidCinMG(form.numero_cin) ? invalidFieldStyle : undefined}
+                      required placeholder="Ex: 101 234 567 890" maxLength={15} />
                   </div>
                 </div>
                 <div className="form-row">
@@ -229,13 +280,18 @@ export default function EtudiantTab() {
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Téléphone</label>
+                    {/* FIX : formatage automatique "03X XX XXX XX" */}
                     <input className="form-control" value={form.telephone}
-                      onChange={set('telephone')} />
+                      onChange={e => setForm(p => ({ ...p, telephone: formatTelephoneMG(e.target.value) }))}
+                      style={form.telephone && !isValidTelephoneMG(form.telephone) ? invalidFieldStyle : undefined}
+                      placeholder="Ex: 034 12 345 67" maxLength={13} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">E-mail</label>
                     <input className="form-control" type="email" value={form.email}
-                      onChange={set('email')} />
+                      onChange={set('email')}
+                      style={form.email && !isValidEmailComFr(form.email) ? invalidFieldStyle : undefined}
+                      placeholder="exemple@domaine.com" />
                   </div>
                 </div>
               </div>
@@ -374,10 +430,19 @@ export default function EtudiantTab() {
                     <td style={{ fontSize: 12 }}>{e.email}</td>
                     <td onClick={ev => ev.stopPropagation()}>
                       <div className="table-actions">
+                        {/* FIX : nouveau bouton + — bascule vers l'onglet
+                            Inscription avec ce matricule déjà pré-rempli */}
+                        {onInscrire && (
+                          <button className="btn-icon" title="Inscrire à une session"
+                            onClick={() => onInscrire(e.matricule)}
+                            style={{ color: '#16a34a' }}>
+                            <IcoPlus />
+                          </button>
+                        )}
                         <button className="btn-icon edit" onClick={() => handleEdit(e)} title="Modifier">
                           <IcoEdit />
                         </button>
-                        <button className="btn-icon delete" onClick={() => handleDelete(e.matricule)} title="Supprimer">
+                        <button className="btn-icon delete" onClick={() => setConfirmDeleteMat(e.matricule)} title="Supprimer">
                           <IcoTrash />
                         </button>
                       </div>
@@ -399,6 +464,15 @@ export default function EtudiantTab() {
       </div>
 
       {viewing && <DetailModal e={viewing} onClose={() => setViewing(null)} />}
+
+      <ConfirmDialog
+        open={!!confirmDeleteMat}
+        title="Supprimer cet étudiant ?"
+        message={confirmDeleteMat ? `L'étudiant « ${confirmDeleteMat} » sera définitivement supprimé. Cette action est irréversible.` : ''}
+        confirmLabel="Supprimer"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteMat(null)}
+      />
     </>
   )
 }

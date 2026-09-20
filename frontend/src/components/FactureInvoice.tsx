@@ -1,4 +1,73 @@
 import { IcoDoc, IcoPrint } from './icons'
+import Logo from '../assets/logo.png'
+
+// FIX : ce composant est désormais l'UNIQUE modèle de facture de toute
+// l'application — utilisé par le module Facture (FacturePage.tsx) ET par
+// l'aperçu affiché juste après une inscription (InscriptionTab.tsx), et par
+// tout autre écran qui a besoin d'afficher/imprimer une facture
+// (Recouvrement, etc.). Avant, chaque écran avait sa propre reproduction :
+// FacturePage.tsx reproduisait fidèlement l'ancien modèle FPDF (logo, NIF,
+// STAT, tableau Formation/Frais/Montant payé, "Arrêté à la somme de...",
+// "Le responsable", REF en bas), tandis que ce fichier avait un tout autre
+// design "carte moderne" (encarts colorés, sans logo, sans NIF/STAT, sans
+// montant en lettres). Résultat : la facture affichée après une inscription
+// ne ressemblait pas du tout à la vraie facture du module Facture. La
+// structure ci-dessous reprend donc exactement celle de FacturePage.tsx —
+// structure, numérotation, référence, infos étudiant, montants, infos
+// d'inscription et présentation générale identiques partout.
+
+// ─── Conversion nombre → lettres (FR), pour "Arrêté à la somme de : ..." ──
+const UNITES = ['', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf',
+  'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize', 'dix-sept', 'dix-huit', 'dix-neuf']
+const DIZAINES = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'soixante', 'quatre-vingt', 'quatre-vingt']
+
+function troisChiffresEnLettres(n: number): string {
+  if (n === 0) return ''
+  const c = Math.floor(n / 100)
+  const r = n % 100
+  let mots = ''
+  if (c > 0) mots += (c === 1 ? 'cent' : UNITES[c] + ' cent') + (c > 1 && r === 0 ? 's' : '') + (r > 0 ? ' ' : '')
+  if (r > 0) {
+    if (r < 20) {
+      mots += UNITES[r]
+    } else {
+      const d = Math.floor(r / 10)
+      const u = r % 10
+      if (d === 7 || d === 9) {
+        mots += DIZAINES[d] + (u === 1 && d === 7 ? ' et onze' : '-' + UNITES[10 + u])
+      } else {
+        mots += DIZAINES[d] + (u === 0 ? '' : (u === 1 && (d === 2 || d === 3 || d === 4 || d === 5 || d === 6) ? ' et un' : '-' + UNITES[u]))
+        if (d === 8 && u === 0) mots += 's'
+      }
+    }
+  }
+  return mots
+}
+
+function numberToWordsFR(n: number): string {
+  n = Math.round(Math.abs(n))
+  if (n === 0) return 'zéro'
+  const tranches = [
+    { valeur: 1_000_000_000, mot: 'milliard' },
+    { valeur: 1_000_000, mot: 'million' },
+    { valeur: 1_000, mot: 'mille' },
+  ]
+  let reste = n
+  let mots: string[] = []
+  for (const t of tranches) {
+    const q = Math.floor(reste / t.valeur)
+    if (q > 0) {
+      if (t.valeur === 1000 && q === 1) {
+        mots.push('mille')
+      } else {
+        mots.push(troisChiffresEnLettres(q) + ' ' + t.mot + (q > 1 && t.mot !== 'mille' ? 's' : ''))
+      }
+      reste -= q * t.valeur
+    }
+  }
+  if (reste > 0) mots.push(troisChiffresEnLettres(reste))
+  return mots.join(' ').replace(/\s+/g, ' ').trim()
+}
 
 export interface FactureData {
   reference: string; numero: string
@@ -20,7 +89,16 @@ const fmt = (n: number) => Number(n).toLocaleString('fr')
 export default function FactureInvoice({ factures, title }: Props) {
   if (factures.length === 0) return null
 
-  const handlePrint = () => window.print()
+  // FIX : impression fidèle A5 — scope le print CSS via une classe sur
+  // <body> pour ne pas interférer avec l'impression #certificat-print (A4
+  // paysage) qui vit sur une autre page de l'appli.
+  const handlePrint = () => {
+    document.body.classList.add('printing-facture')
+    const cleanup = () => document.body.classList.remove('printing-facture')
+    window.addEventListener('afterprint', cleanup, { once: true })
+    window.print()
+    setTimeout(cleanup, 3000)
+  }
 
   return (
     <div className="card">
@@ -35,87 +113,109 @@ export default function FactureInvoice({ factures, title }: Props) {
         </button>
       </div>
 
-      <div className="card-body" id="facture-print">
-        {factures.map((facture, idx) => (
-          <div key={facture.reference}
-            style={{ maxWidth: 700, margin: '0 auto', ...(idx > 0 ? { marginTop: 40, paddingTop: 40, borderTop: '2px dashed #e2e8f0' } : {}) }}>
+      {/* Réplique exacte de components/facture.php (FPDF, A5 148×210mm) —
+          mêmes libellés, même ordre des lignes, mêmes bordures de tableau. */}
+      <style>{'@media print { @page { size: A5 portrait; margin: 0; } } '}</style>
+      <div className="card-body facture-screen-wrap" id="facture-print">
+        {factures.map((facture) => (
+          <div key={facture.reference} className="facture-sheet">
 
-            {/* En-tête */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, paddingBottom: 20, borderBottom: '2px solid #1e3a8a' }}>
-              <div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#1e3a8a' }}>{facture.centre.nom}</div>
-                <div style={{ fontSize: 12, color: '#64748b' }}>{facture.centre.adresse}</div>
-                <div style={{ fontSize: 12, color: '#64748b' }}>{facture.centre.tel} | {facture.centre.email}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#1e3a8a' }}>FACTURE</div>
-                <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>Réf : <b>{facture.reference}</b></div>
-                <div style={{ fontSize: 13, color: '#64748b' }}>N° : <b>{facture.numero}</b></div>
-                <div style={{ fontSize: 13, color: '#64748b' }}>Date : <b>{facture.date_facture}</b></div>
+            {/* En-tête : logo + titre */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <img src={Logo} alt="Nir'Info" style={{ width: '37mm', height: '15mm', objectFit: 'contain' }} />
+              <div style={{ fontSize: '13pt', fontWeight: 700, textAlign: 'right' }}>
+                FACTURE N° {facture.numero}
               </div>
             </div>
 
-            {/* Étudiant */}
-            <div style={{ background: '#f8fafc', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a8a', marginBottom: 10, textTransform: 'uppercase' }}>Étudiant</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
-                <div><span style={{ color: '#64748b' }}>Matricule : </span><b>{facture.etudiant.matricule}</b></div>
-                <div><span style={{ color: '#64748b' }}>Nom : </span><b>{facture.etudiant.nom} {facture.etudiant.prenom}</b></div>
-                <div><span style={{ color: '#64748b' }}>Téléphone : </span>{facture.etudiant.telephone}</div>
-                <div><span style={{ color: '#64748b' }}>Email : </span>{facture.etudiant.email}</div>
-              </div>
+            {/* Coordonnées centre / destinataire */}
+            <table style={{ marginTop: '6mm' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '55%' }}>LOT IIA 80 C Ampandrana Ouest</td>
+                  <td>Adressée à</td>
+                </tr>
+                <tr>
+                  <td>ANTANANARIVO 101</td>
+                  <td>{facture.etudiant.nom}</td>
+                </tr>
+                <tr>
+                  <td>Tel: 034 36 176 60 - 034 77 775 34</td>
+                  <td>{facture.etudiant.prenom}</td>
+                </tr>
+                <tr>
+                  <td>Mail: admin@nir-info.mg</td>
+                  <td>Matricule: {facture.etudiant.matricule}</td>
+                </tr>
+                <tr><td colSpan={2}>Site: https://nir-info.mg</td></tr>
+                <tr><td colSpan={2}>NIF : 4003162374</td></tr>
+                <tr><td colSpan={2}>STAT : 95110 11 2018 0059 47</td></tr>
+              </tbody>
+            </table>
+
+            <div style={{ marginTop: '8mm', fontSize: '10pt' }}>
+              Date: {facture.date_facture}
             </div>
 
-            {/* Formation */}
-            <div style={{ background: '#eff6ff', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a8a', marginBottom: 10, textTransform: 'uppercase' }}>Formation</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
-                <div><span style={{ color: '#64748b' }}>Module : </span><b>{facture.session.module_nom}</b></div>
-                <div><span style={{ color: '#64748b' }}>Session : </span>{facture.session.code_session}</div>
-                <div><span style={{ color: '#64748b' }}>Début : </span>{facture.session.date_debut}</div>
-                <div><span style={{ color: '#64748b' }}>Fin : </span>{facture.session.date_fin}</div>
-                <div><span style={{ color: '#64748b' }}>Lieu : </span>{facture.session.lieu}</div>
-                <div><span style={{ color: '#64748b' }}>Horaire : </span>{facture.session.horaire_desc}</div>
-              </div>
+            {/* Détail formation / frais / montant payé */}
+            <table style={{ marginTop: '3mm', border: '1px solid #000' }}>
+              <thead>
+                <tr>
+                  <th style={{ border: '1px solid #000', textAlign: 'left' }}>Formation</th>
+                  <th style={{ borderTop: '1px solid #000', borderBottom: '1px solid #000', borderRight: '1px solid #000', textAlign: 'right' }}>Frais</th>
+                  <th style={{ borderTop: '1px solid #000', borderBottom: '1px solid #000', borderRight: '1px solid #000', textAlign: 'right' }}>Montant payé</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={{ borderLeft: '1px solid #000', borderRight: '1px solid #000' }}>{facture.session.module_nom}</td>
+                  <td style={{ borderRight: '1px solid #000', textAlign: 'right' }}>{fmt(facture.session.frais_formation)} Ar</td>
+                  <td style={{ borderRight: '1px solid #000', textAlign: 'right' }}>{fmt(facture.inscription.montant_paye)} Ar</td>
+                </tr>
+                <tr>
+                  <td style={{ borderLeft: '1px solid #000', borderRight: '1px solid #000' }}>Session du {facture.session.date_debut}</td>
+                  <td style={{ borderRight: '1px solid #000' }}></td>
+                  <td style={{ borderRight: '1px solid #000' }}></td>
+                </tr>
+                <tr>
+                  <td style={{ borderLeft: '1px solid #000', borderRight: '1px solid #000', borderBottom: '1px solid #000' }}>au {facture.session.date_fin}</td>
+                  <td style={{ borderRight: '1px solid #000', borderBottom: '1px solid #000' }}></td>
+                  <td style={{ borderRight: '1px solid #000', borderBottom: '1px solid #000' }}></td>
+                </tr>
+                <tr>
+                  <td></td>
+                  <td colSpan={1} style={{ border: '1px solid #000', textAlign: 'left' }}>Montant déjà payé</td>
+                  <td style={{ borderTop: '1px solid #000', borderBottom: '1px solid #000', borderRight: '1px solid #000', textAlign: facture.inscription.somme_deja_paye ? 'right' : 'center' }}>
+                    {facture.inscription.somme_deja_paye ? `${fmt(facture.inscription.somme_deja_paye)} Ar` : '-'}
+                  </td>
+                </tr>
+                <tr>
+                  <td></td>
+                  <td style={{ border: '1px solid #000', textAlign: 'left' }}>Total payé</td>
+                  <td style={{ borderTop: '1px solid #000', borderBottom: '1px solid #000', borderRight: '1px solid #000', textAlign: 'right' }}>
+                    {fmt(facture.inscription.total_paye)} Ar
+                  </td>
+                </tr>
+                <tr>
+                  <td></td>
+                  <td style={{ border: '1px solid #000', textAlign: 'left' }}>Reste à payer</td>
+                  <td style={{ borderTop: '1px solid #000', borderBottom: '1px solid #000', borderRight: '1px solid #000', textAlign: facture.inscription.reste ? 'right' : 'center' }}>
+                    {facture.inscription.reste ? `${fmt(facture.inscription.reste)} Ar` : '-'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style={{ marginTop: '8mm', fontSize: '10pt' }}>
+              Arrêté à la somme de : {numberToWordsFR(facture.inscription.montant_paye).toUpperCase()} ARIARY
             </div>
 
-            {/* Paiement */}
-            <div style={{ border: '2px solid #1e3a8a', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a8a', marginBottom: 14, textTransform: 'uppercase' }}>Détail du paiement</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: '#1e3a8a', color: 'white' }}>
-                    <th style={{ padding: '8px 14px', textAlign: 'left' }}>Description</th>
-                    <th style={{ padding: '8px 14px', textAlign: 'right' }}>Montant</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '10px 14px' }}>Frais de formation — {facture.session.module_nom}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>{fmt(facture.session.frais_formation)} Ar</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '10px 14px', color: '#64748b' }}>Déjà versé (avant cette facture)</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>{fmt(facture.inscription.somme_deja_paye)} Ar</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '10px 14px', color: '#16a34a', fontWeight: 600 }}>Montant payé (cette facture)</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>{fmt(facture.inscription.montant_paye)} Ar</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '10px 14px', fontWeight: 600 }}>Total versé</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700 }}>{fmt(facture.inscription.total_paye)} Ar</td>
-                  </tr>
-                  <tr style={{ background: '#fef2f2' }}>
-                    <td style={{ padding: '10px 14px', color: '#dc2626', fontWeight: 600 }}>Reste à payer</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{fmt(facture.inscription.reste)} Ar</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div style={{ marginTop: '8mm', fontSize: '10pt' }}>
+              Le responsable
             </div>
 
-            <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 12, marginTop: 20, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
-              Merci pour votre confiance — {facture.centre.nom} © {new Date().getFullYear()}
+            <div style={{ marginTop: '18mm', textAlign: 'right', fontSize: '9pt' }}>
+              REF : {facture.reference}
             </div>
           </div>
         ))}

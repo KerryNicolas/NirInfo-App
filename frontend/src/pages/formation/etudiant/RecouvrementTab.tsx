@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
 import api from '../../../api/axios'
 import toast from 'react-hot-toast'
+import { useSessionSuggestions } from '../../../hooks/useSessionSuggestions'
+import { useMatriculeSuggestions } from '../../../hooks/useMatriculeSuggestions'
 import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
 import FactureInvoice, { FactureData } from '../../../components/FactureInvoice'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../../components/icons'
+import { formatMontantInput, parseMontantInput, isValidMatriculeNI, invalidFieldStyle } from '../../../utils/validators'
 
 interface Recouvrement {
   id_recouvrement: number; matricule: string; nom: string; prenom: string
   code_session: string; montant_paye: number; reste: number
-  date_paiement: string; compte: string; lieu_paiement: string; editeur: string
+  date_paiement: string; compte: string; id_compte: number; lieu_paiement: string; editeur: string
   ref_facture: string
 }
-interface Session { code_session: string }
 interface Compte { id_compte: number; libelle: string }
 
 const EMPTY_R = {
@@ -58,23 +61,30 @@ function DetailModal({ r, onClose }: { r: Recouvrement; onClose: () => void }) {
 
 export default function RecouvrementTab() {
   const table    = useTable<Recouvrement>('/recouvrements', { perPage: 15 })
-  const [sessions, setSessions] = useState<Session[]>([])
   const [comptes,  setComptes]  = useState<Compte[]>([])
   const [form,     setForm]     = useState(EMPTY_R)
+  // FIX : autocomplétion Matricule — même hook déjà utilisé dans Inscription
+  const matriculeSuggestions = useMatriculeSuggestions(form.matricule)
+  // FIX : remplace le chargement complet de /sessions (2671+ lignes, sans
+  // limite) par une autocomplétion débattue — même principe qu'Inscription,
+  // mais onlyActive=false ici : on peut encore percevoir un recouvrement sur
+  // une session déjà terminée, donc on ne les exclut pas des suggestions.
+  const [sessionQuery, setSessionQuery] = useState('')
+  const sessionSuggestions = useSessionSuggestions(sessionQuery, false)
   const [editing,  setEditing]  = useState<Recouvrement | null>(null)
   const [viewing,  setViewing]  = useState<Recouvrement | null>(null)
   const [saving,   setSaving]   = useState(false)
   const [derniereFacture, setDerniereFacture] = useState<FactureData | null>(null)
   const [loadingFacture, setLoadingFacture]   = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
   useEffect(() => {
-    api.get('/sessions').then(r => setSessions(r.data.data ?? [])).catch(() => {})
     api.get('/inscriptions/comptes')
       .then(r => setComptes(Array.isArray(r.data) ? r.data : []))
       .catch(() => setComptes([]))
   }, [])
 
-  const reset = () => { setForm(EMPTY_R); setEditing(null); setDerniereFacture(null) }
+  const reset = () => { setForm(EMPTY_R); setSessionQuery(''); setEditing(null); setDerniereFacture(null) }
 
   const handleEdit = (r: Recouvrement) => {
     setEditing(r)
@@ -83,11 +93,13 @@ export default function RecouvrementTab() {
       matricule: r.matricule,
       code_session: r.code_session,
       date_paiement: r.date_paiement?.split('T')[0] || new Date().toISOString().split('T')[0],
-      reste_a_payer: String(r.reste),
-      montant_paye: String(r.montant_paye),
-      id_compte: '',
+      reste_a_payer: formatMontantInput(String(r.reste)),
+      montant_paye: formatMontantInput(String(r.montant_paye)),
+      // FIX : pré-rempli avec le vrai id_compte désormais renvoyé par l'API
+      id_compte: String(r.id_compte ?? ''),
       lieu_paiement: r.lieu_paiement || 'Ampandrana',
     })
+    setSessionQuery(r.code_session)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -98,16 +110,35 @@ export default function RecouvrementTab() {
     setDerniereFacture(null)
     try {
       if (editing) {
+        // FIX : envoie maintenant matricule/code_session aussi — avant,
+        // ils étaient ignorés même si modifiés. "reste" n'est plus envoyé :
+        // reste_a_payer est désormais toujours recalculé automatiquement
+        // côté backend, jamais accepté comme valeur saisie manuellement.
         await api.put(`/recouvrements/${editing.id_recouvrement}`, {
-          montant_paye: form.montant_paye,
-          reste: form.reste_a_payer,
+          matricule: form.matricule,
+          code_session: form.code_session,
+          // FIX : le champ Montant payé est saisi formaté ("1 000 000")
+          // pour l'affichage — on renvoie la valeur numérique brute à l'API.
+          montant_paye: parseMontantInput(form.montant_paye),
           id_compte: form.id_compte,
           lieu_paiement: form.lieu_paiement,
         })
         toast.success('Recouvrement mis à jour')
         reset()
       } else {
-        const r = await api.post('/recouvrements', form)
+        // FIX : "reste_a_payer" n'est plus envoyé — même règle que la
+        // branche édition juste au-dessus : ce montant est désormais
+        // toujours recalculé automatiquement côté backend, jamais accepté
+        // tel quel depuis le client (le champ reste affiché à l'écran pour
+        // référence, mais sa valeur n'est plus transmise à l'API).
+        const r = await api.post('/recouvrements', {
+          matricule: form.matricule,
+          code_session: form.code_session,
+          date_paiement: form.date_paiement,
+          montant_paye: parseMontantInput(form.montant_paye),
+          id_compte: form.id_compte,
+          lieu_paiement: form.lieu_paiement,
+        })
         toast.success('Recouvrement enregistré')
 
         setLoadingFacture(true)
@@ -121,16 +152,18 @@ export default function RecouvrementTab() {
         }
 
         setForm(p => ({ ...p, matricule:'', code_session:'', montant_paye:'', reste_a_payer:'', id_compte:'' }))
+        setSessionQuery('')
       }
       table.reload()
     } catch (err: any) { toast.error(err.response?.data?.message || "Erreur lors de l'enregistrement") }
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer ce recouvrement ?')) return
-    try { await api.delete(`/recouvrements/${id}`); toast.success('Recouvrement supprimé'); table.reload() }
+  const handleDelete = async () => {
+    if (!confirmDeleteId) return
+    try { await api.delete(`/recouvrements/${confirmDeleteId}`); toast.success('Recouvrement supprimé'); table.reload() }
     catch { toast.error('Erreur lors de la suppression') }
+    finally { setConfirmDeleteId(null) }
   }
 
   const fmt = (n: number) => Number(n).toLocaleString('fr')
@@ -147,16 +180,37 @@ export default function RecouvrementTab() {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Matricule </label>
-                <input className="form-control" value={form.matricule}
+                <input className="form-control" list="matricule-suggestions-recouvrement" value={form.matricule}
                   onChange={e => setForm(p => ({ ...p, matricule: e.target.value.toUpperCase() }))}
-                  required placeholder="Ex: NI-3824" disabled={!!editing} />
+                  style={form.matricule && !isValidMatriculeNI(form.matricule) ? invalidFieldStyle : undefined}
+                  required placeholder="Ex: NI-3824" />
+                <datalist id="matricule-suggestions-recouvrement">
+                  {matriculeSuggestions.map(s => (
+                    <option key={s.matricule} value={s.matricule}>{s.nom} {s.prenom}</option>
+                  ))}
+                </datalist>
               </div>
               <div className="form-group">
                 <label className="form-label">Session </label>
-                <select className="form-control" value={form.code_session} onChange={set('code_session')} required disabled={!!editing}>
-                  <option value="">-- Choisir une session --</option>
-                  {sessions.map(s => <option key={s.code_session} value={s.code_session}>{s.code_session}</option>)}
-                </select>
+                {/* FIX : autocomplétion au lieu du <select> chargé avec
+                    toutes les sessions. onlyActive=false — un recouvrement
+                    peut concerner une session déjà terminée. */}
+                <input
+                  className="form-control"
+                  list="session-suggestions-recouvrement"
+                  value={sessionQuery}
+                  onChange={e => {
+                    const v = e.target.value
+                    setSessionQuery(v)
+                    const match = sessionSuggestions.find(s => s.code_session === v)
+                    setForm(p => ({ ...p, code_session: match ? v : '' }))
+                  }}
+                  required placeholder="Tapez pour rechercher une session…" />
+                <datalist id="session-suggestions-recouvrement">
+                  {sessionSuggestions.map(s => (
+                    <option key={s.code_session} value={s.code_session}>{s.module_nom}</option>
+                  ))}
+                </datalist>
               </div>
             </div>
             <div className="form-row">
@@ -165,14 +219,17 @@ export default function RecouvrementTab() {
                 <input className="form-control" type="date" value={form.date_paiement} onChange={set('date_paiement')} required />
               </div>
               <div className="form-group">
-                <label className="form-label">Reste à payer</label>
-                <input className="form-control" type="number" value={form.reste_a_payer} onChange={set('reste_a_payer')} placeholder="Montant restant avant paiement" />
+                {/* FIX : indicatif seulement — cette valeur n'est plus
+                    envoyée au serveur (ni en création ni en édition), le
+                    "reste" étant toujours recalculé côté backend. */}
+                <label className="form-label">Reste à payer (indicatif)</label>
+                <input className="form-control" type="text" inputMode="numeric" value={form.reste_a_payer} onChange={e => setForm(p => ({ ...p, reste_a_payer: formatMontantInput(e.target.value) }))} placeholder="Non transmis — recalculé automatiquement" />
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Montant payé </label>
-                <input className="form-control" type="number" value={form.montant_paye} onChange={set('montant_paye')} required />
+                <input className="form-control" type="text" inputMode="numeric" value={form.montant_paye} onChange={e => setForm(p => ({ ...p, montant_paye: formatMontantInput(e.target.value) }))} required placeholder="Ex: 100 000" />
               </div>
               <div className="form-group">
                 <label className="form-label">Compte</label>
@@ -241,7 +298,7 @@ export default function RecouvrementTab() {
                     <td style={{ fontSize:12 }}>{r.date_paiement}</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(r)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => handleDelete(r.id_recouvrement)}><IcoTrash /></button>
+                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(r.id_recouvrement)}><IcoTrash /></button>
                     </div></td>
                   </tr>
                 ))}
@@ -253,6 +310,15 @@ export default function RecouvrementTab() {
       </div>
 
       {viewing && <DetailModal r={viewing} onClose={() => setViewing(null)} />}
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="Supprimer ce recouvrement ?"
+        message="Ce recouvrement sera définitivement supprimé. Cette action est irréversible."
+        confirmLabel="Supprimer"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </>
   )
 }

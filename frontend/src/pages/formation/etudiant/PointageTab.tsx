@@ -1,34 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import api from '../../../api/axios'
 import toast from 'react-hot-toast'
+import { useSessionSuggestions } from '../../../hooks/useSessionSuggestions'
 import { IcoClipboard, IcoCheck, IcoEye, IcoCalendar, IcoSave, IcoX } from '../../../components/icons'
 
-interface Session { code_session: string }
 interface PointageRow {
   matricule: string; nom: string; prenom: string
   present: boolean; id_pointage?: number
 }
 
 export default function PointageTab() {
-  const [sessions,  setSessions]  = useState<Session[]>([])
+  // FIX : remplace le chargement complet de /sessions (2671+ lignes, sans
+  // limite) par une autocomplétion débattue. onlyActive=false — l'historique
+  // de pointage sert justement à consulter des sessions déjà terminées.
+  const [sessionQuery, setSessionQuery] = useState('')
+  const sessionSuggestions = useSessionSuggestions(sessionQuery, false)
   const [session,   setSession]   = useState('')
   const [date,      setDate]      = useState(new Date().toISOString().split('T')[0])
   const [rows,      setRows]      = useState<PointageRow[]>([])
   const [loading,   setLoading]   = useState(false)
   const [saving,    setSaving]    = useState(false)
   const [searched,  setSearched]  = useState(false)
-
-  useEffect(() => {
-    api.get('/sessions')
-      .then(r => {
-        // LIFO — sessions les plus récentes en premier
-        const data = (r.data.data ?? []).sort((a: any, b: any) =>
-          new Date(b.date_debut ?? '').getTime() - new Date(a.date_debut ?? '').getTime()
-        )
-        setSessions(data)
-      })
-      .catch(() => {})
-  }, [])
 
   const handleAfficher = async () => {
     if (!session) { toast.error('Veuillez choisir une session'); return }
@@ -102,12 +94,24 @@ export default function PointageTab() {
         <div className="form-row" style={{ maxWidth: 600 }}>
           <div className="form-group">
             <label className="form-label">Session </label>
-            <select className="form-control" value={session} onChange={e => setSession(e.target.value)}>
-              <option value="">-- Choisir une session --</option>
-              {sessions.map(s => (
-                <option key={s.code_session} value={s.code_session}>{s.code_session}</option>
+            {/* FIX : autocomplétion au lieu du <select> chargé avec toutes
+                les sessions */}
+            <input
+              className="form-control"
+              list="session-suggestions-pointage"
+              value={sessionQuery}
+              onChange={e => {
+                const v = e.target.value
+                setSessionQuery(v)
+                const match = sessionSuggestions.find(s => s.code_session === v)
+                setSession(match ? v : '')
+              }}
+              placeholder="Tapez pour rechercher une session…" />
+            <datalist id="session-suggestions-pointage">
+              {sessionSuggestions.map(s => (
+                <option key={s.code_session} value={s.code_session}>{s.module_nom}</option>
               ))}
-            </select>
+            </datalist>
           </div>
           <div className="form-group">
             <label className="form-label">Date</label>

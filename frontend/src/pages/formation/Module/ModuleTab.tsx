@@ -3,6 +3,7 @@ import api from '../../../api/axios'
 import toast from 'react-hot-toast'
 import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import { IcoEdit, IcoTrash, IcoSearch, IcoClock, IcoInfo, IcoX } from '../../../components/icons'
 import ModuleForm from './ModuleForm'
 
@@ -31,6 +32,7 @@ export default function ModuleTab() {
   const [form,    setForm]    = useState(EMPTY)
   const [saving,  setSaving]  = useState(false)
   const [showEditeur, setShowEditeur] = useState<string | null>(null)
+  const [confirmDeleteCode, setConfirmDeleteCode] = useState<string | null>(null)
 
   const reset = () => { setForm(EMPTY); setEditing(null) }
 
@@ -51,10 +53,11 @@ export default function ModuleTab() {
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (code: string) => {
-    if (!confirm(`Supprimer le module "${code}" ?`)) return
-    try { await api.delete(`/modules/${code}`); toast.success('Module supprimé'); table.reload() }
+  const handleDelete = async () => {
+    if (!confirmDeleteCode) return
+    try { await api.delete(`/modules/${confirmDeleteCode}`); toast.success('Module supprimé'); table.reload() }
     catch { toast.error('Erreur suppression') }
+    finally { setConfirmDeleteCode(null) }
   }
 
   const handleChange = (key: keyof typeof EMPTY) =>
@@ -62,7 +65,7 @@ export default function ModuleTab() {
       setForm(p => ({ ...p, [key]: e.target.value }))
 
   return (
-    <div className="app-layout">  
+    <div className="app-layout">
       <div className="main-content">
        <div className="top-bar">
           <span className="top-bar-title" style={{ display:'flex', alignItems:'center', gap:8 }}><IcoClock /> Module </span>
@@ -142,7 +145,7 @@ export default function ModuleTab() {
                         <div className="table-actions">
                           <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(m.editeur)}><IcoInfo /></button>
                           <button className="btn-icon edit" onClick={() => handleEdit(m)}><IcoEdit /></button>
-                          <button className="btn-icon delete" onClick={() => handleDelete(m.code_module)}><IcoTrash /></button>
+                          <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(m.code_module)}><IcoTrash /></button>
                         </div>
                       </td>
                     </tr>
@@ -160,6 +163,15 @@ export default function ModuleTab() {
       </div>
 
       {showEditeur !== null && <EditeurPopover editeur={showEditeur} onClose={() => setShowEditeur(null)} />}
+
+      <ConfirmDialog
+        open={!!confirmDeleteCode}
+        title="Supprimer ce module ?"
+        message={confirmDeleteCode ? `Le module « ${confirmDeleteCode} » sera définitivement supprimé. Cette action est irréversible.` : ''}
+        confirmLabel="Supprimer"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteCode(null)}
+      />
     </div>
   )
 }

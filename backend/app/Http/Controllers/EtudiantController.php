@@ -75,6 +75,28 @@ class EtudiantController extends BaseApiController
     }
 
     /* ══════════════════════════════════════
+     | SHOW — fiche d'un seul étudiant par matricule
+     ══════════════════════════════════════ */
+    // FIX : méthode manquante — CertificationTab.tsx (et probablement
+    // d'autres écrans) appellent GET /etudiants/{matricule} pour vérifier
+    // qu'un étudiant existe avant de créer/modifier un certificat. Comme
+    // cette méthode n'existait pas du tout, l'appel échouait TOUJOURS
+    // (route inexistante ou erreur serveur selon la config des routes), et
+    // le frontend affichait "Étudiant non trouvé" même pour un étudiant
+    // qui existe très bien — un faux négatif systématique, indépendant des
+    // données. Champs renvoyés bruts (nom_etudiant, prenom_etudiant...) car
+    // c'est ce que le frontend lit directement (pas les alias nom/prenom
+    // utilisés dans index()).
+    public function show($id)
+    {
+        $etudiant = DB::table('etudiant')->where('matricule_etudiant', $id)->first();
+        if (!$etudiant) {
+            return response()->json(['message' => 'Étudiant non trouvé'], 404);
+        }
+        return response()->json($etudiant);
+    }
+
+    /* ══════════════════════════════════════
      | UPDATE
      ══════════════════════════════════════ */
     public function update(Request $request, $id)
@@ -101,8 +123,30 @@ class EtudiantController extends BaseApiController
     /* ══════════════════════════════════════
      | DESTROY
      ══════════════════════════════════════ */
+    // FIX : aucune contrainte de clé étrangère n'existe en base entre
+    // inscription.matricule_etudiant et etudiant.matricule_etudiant (vérifié
+    // via information_schema — KEY_COLUMN_USAGE et REFERENTIAL_CONSTRAINTS
+    // renvoient vide). Sans ce garde-fou, supprimer un étudiant laissait ses
+    // inscriptions/recouvrements orphelins dans la table `inscription` :
+    // elles disparaissaient silencieusement de tous les écrans (le JOIN avec
+    // `etudiant` dans InscriptionController::index les exclut), alors que
+    // l'argent déjà encaissé restait compté indéfiniment dans le solde du
+    // compte — un trou invisible dans le Budget. On bloque désormais la
+    // suppression tant que l'étudiant a au moins une ligne dans `inscription`
+    // (table partagée par Inscription ET Recouvrement).
     public function destroy($id)
     {
+        $exists = DB::table('etudiant')->where('matricule_etudiant', $id)->exists();
+        if (!$exists) return $this->err('Étudiant non trouvé', 404);
+
+        $nbInscriptions = DB::table('inscription')->where('matricule_etudiant', $id)->count();
+        if ($nbInscriptions > 0) {
+            return $this->err(
+                "Impossible de supprimer cet étudiant : il a $nbInscriptions inscription(s)/paiement(s) enregistré(s). Supprimez d'abord ses inscriptions et recouvrements, ou contactez un administrateur.",
+                422
+            );
+        }
+
         DB::table('etudiant')->where('matricule_etudiant', $id)->delete();
         return $this->ok('Étudiant supprimé avec succès');
     }

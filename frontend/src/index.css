@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400&display=swap');
 
 @import "tailwindcss";
 
@@ -12,12 +13,13 @@
 
 /* ── Variables globales ── */
 :root {
-  --primary:        #1e40af;
-  --primary-dark:   #1e3a8a;
-  --primary-light:  #3b82f6;
-  --accent:         #2563eb;
-  --sidebar-bg:     #0f172a;
-  --sidebar-active: #1d4ed8;
+  --primary:        #136a9c;
+  --primary-dark:   #0d4d75;
+  --primary-light:  #1a84bf;
+  --accent:         #136a9c;
+  --sidebar-bg:     #04283f;
+  --sidebar-active: #136a9c;
+  --sidebar-active-border: #fcae1b;
   --header-bg:      #ffffff;
   --bg-main:        #f0f2f5;
   --bg-card:        #ffffff;
@@ -43,7 +45,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   background: var(--bg-main);
   color: var(--text-primary);
   font-size: 14px;
@@ -124,8 +126,8 @@ body {
 }
 
 .sidebar-nav a.active, .sidebar-nav button.active {
-  color: white; background: rgba(29,78,216,0.35);
-  border-left-color: #60a5fa;
+  color: white; background: var(--sidebar-active);
+  border-left-color: var(--sidebar-active-border);
 }
 
 .sidebar-nav .nav-icon { width: 17px; height: 17px; flex-shrink: 0; opacity: 0.85; }
@@ -253,7 +255,7 @@ body {
   border-radius: var(--radius); font-size: 13px; color: var(--text-primary);
   background: white; transition: border-color 0.15s, box-shadow 0.15s; font-family: inherit;
 }
-.form-control:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+.form-control:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(19,106,156,0.1); }
 .form-control::placeholder { color: #b0bac7; }
 
 .form-row   { display: grid; grid-template-columns: 1fr 1fr;     gap: 14px; }
@@ -269,8 +271,8 @@ body {
   transition: var(--transition); text-decoration: none;
   white-space: nowrap; font-family: inherit;
 }
-.btn-primary   { background: var(--accent); color: white; box-shadow: 0 2px 6px rgba(37,99,235,0.25); }
-.btn-primary:hover  { background: #1d4ed8; box-shadow: 0 3px 10px rgba(37,99,235,0.35); transform: translateY(-1px); }
+.btn-primary   { background: var(--accent); color: white; box-shadow: 0 2px 6px rgba(47, 169, 240, 0.25); }
+.btn-primary:hover  { background: #23272b; box-shadow: 0 3px 10px rgba(35,39,43,0.35); transform: translateY(-1px); }
 .btn-success   { background: var(--success); color: white; }
 .btn-success:hover  { background: #16a34a; }
 .btn-danger    { background: var(--danger); color: white; }
@@ -309,7 +311,7 @@ table {
 }
 
 thead th {
-  background: #1e3a8a; color: white;
+  background: #3d93c5; color: white;
   padding: 10px 14px; text-align: left;
   font-weight: 600; font-size: 12px;
   letter-spacing: 0.04em; text-transform: uppercase;
@@ -347,7 +349,7 @@ tbody td.td-wrap {
   border-radius: var(--radius); padding: 6px 12px;
   width: 260px; transition: border-color 0.15s, box-shadow 0.15s;
 }
-.search-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.08); }
+.search-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(19,106,156,0.08); }
 .search-bar input { border: none; outline: none; font-size: 13px; color: var(--text-primary); width: 100%; background: transparent; font-family: inherit; }
 .search-bar svg { color: var(--text-light); flex-shrink: 0; }
 
@@ -780,18 +782,68 @@ tbody td.td-wrap {
 }
 
 /* ════════════════════════════════════════
-   CERTIFICAT — impression A4
+   CERTIFICAT — impression A4 paysage
+   (fidèle à components/certificat_pdf.php : new FPDF('L','mm','A4') → 297×210mm)
 ════════════════════════════════════════ */
 @media print {
   body * { visibility: hidden; }
   #certificat-print, #certificat-print * { visibility: visible; }
   #certificat-print {
     position: fixed; top: 0; left: 0;
-    width: 210mm; height: 297mm;
+    width: 297mm; height: 210mm;
     margin: 0; padding: 0;
   }
   .no-print { display: none !important; }
 }
+/* FIX : la règle @page nommée ci-dessus ne s'appliquait jamais (il manque
+   la propriété "page:" sur l'élément pour l'activer) — le navigateur
+   gardait donc le Portrait par défaut et le contenu (297mm de large)
+   débordait sur 2 pages. Le vrai "@page {size: A4 landscape}" est
+   maintenant injecté par CertificationPage.tsx elle-même (scope au
+   composant, pas de risque de conflit avec la règle A5 de la Facture). */
+
+/* ════════════════════════════════════════
+   FACTURE — impression A5 portrait
+   (fidèle à components/facture.php : new FPDF('P','mm','A5') → 148×210mm)
+════════════════════════════════════════ */
+@media print {
+  body.printing-facture * { visibility: hidden; }
+  body.printing-facture #facture-print,
+  body.printing-facture #facture-print * { visibility: visible; }
+  body.printing-facture #facture-print {
+    position: absolute; top: 0; left: 0; right: 0;
+    margin: 0; padding: 0;
+  }
+  .facture-sheet {
+    width: 148mm; min-height: 210mm;
+    padding: 8mm 10mm;
+    page-break-after: always;
+  }
+  .facture-sheet:last-child { page-break-after: auto; }
+}
+/* FIX : même bug que le certificat — le vrai "@page {size: A5 portrait}"
+   est maintenant injecté par FacturePage.tsx elle-même. */
+
+.facture-screen-wrap {
+  background: #eef1f4;
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+}
+.facture-sheet {
+  background: white;
+  width: 148mm;
+  min-height: 210mm;
+  margin: 0 auto 24px;
+  padding: 8mm 10mm;
+  box-shadow: var(--shadow-lg);
+  font-family: Arial, Helvetica, sans-serif;
+  color: #000;
+  box-sizing: border-box;
+}
+.facture-sheet:last-child { margin-bottom: 0; }
+.facture-sheet table { border-collapse: collapse; width: 100%; }
+.facture-sheet td, .facture-sheet th { padding: 2.2pt 3pt; font-size: 9pt; }
 
 /* ════════════════════════════════════════
    UTILITAIRES

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 /**
  * BaseApiController — supporte à la fois :
@@ -77,5 +78,77 @@ abstract class BaseApiController extends Controller
     protected function err(string $message, int $status = 422): JsonResponse
     {
         return response()->json(['message' => $message], $status);
+    }
+
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * FIX ARCHITECTURE (partagé InscriptionController + RecouvrementController)
+     *
+     * Source unique de vérité pour reste_a_payer sur la table `inscription`.
+     * reste_a_payer n'est JAMAIS calculé avec sa propre formule locale dans
+     * store()/update() — on réécrit toujours la chaîne complète des
+     * paiements d'un (matricule, code_session) donné, dans l'ordre
+     * chronologique (id_paiement ASC), en cumulant. Garantit qu'après
+     * n'importe quelle création, modification ou suppression touchant ce
+     * couple étudiant/session, toutes les lignes concernées redeviennent
+     * cohérentes entre elles.
+     *
+     * À appeler après CHAQUE insert/update/delete sur `inscription`, pour
+     * le(s) groupe(s) matricule/session affecté(s) (l'ancien ET le nouveau
+     * si l'étudiant ou la session a changé sur une ligne existante).
+     * ══════════════════════════════════════════════════════════════════
+     */
+    protected function recalculerResteAPayer(string $matricule, string $codeSession): void
+    {
+        $session = DB::table('session')->where('code_session', $codeSession)->first();
+        $frais   = $session ? floatval($session->frais_module) : 0;
+
+        $lignes = DB::table('inscription')
+            ->where('matricule_etudiant', $matricule)
+            ->where('code_session', $codeSession)
+            ->orderBy('id_paiement', 'ASC')
+            ->get();
+
+        $cumul = 0;
+        foreach ($lignes as $ligne) {
+            $cumul += floatval($ligne->montant_paye);
+            $reste  = max(0, $frais - $cumul);
+            DB::table('inscription')->where('id_paiement', $ligne->id_paiement)
+                ->update(['reste_a_payer' => $reste]);
+        }
+    }
+
+    /**
+     * Ajuste le solde d'un compte + journalise le mouvement (transaction +
+     * gestion_compte) — logique comptable centralisée pour ne pas la
+     * dupliquer entre store(), update() et destroy() dans chaque contrôleur
+     * qui manipule de l'argent.
+     *
+     * @param  int     $idCompte
+     * @param  float   $montant
+     * @param  string  $sens     'E' (entrée, +) ou 'S' (sortie, -)
+     * @param  string  $raison   texte libre journalisé dans transaction.reson
+     */
+    protected function ajusterSoldeCompte(int $idCompte, float $montant, string $sens, string $raison): void
+    {
+        if ($sens === 'E') {
+            DB::table('compte')->where('id_compte', $idCompte)->increment('montant', $montant);
+        } else {
+            DB::table('compte')->where('id_compte', $idCompte)->decrement('montant', $montant);
+        }
+        $idTransaction = DB::table('transaction')->insertGetId([
+            'transaction_type' => $sens,
+            'amount'           => $montant,
+            'reson'            => $raison,
+            'account'          => $idCompte,
+            'date_transaction' => now()->toDateString(),
+        ]);
+        DB::table('gestion_compte')->insert([
+            'id_compte'      => $idCompte,
+            'type'           => $sens,
+            'montant'        => $montant,
+            'date_gestion'   => now()->toDateString(),
+            'id_transaction' => $idTransaction,
+        ]);
     }
 }

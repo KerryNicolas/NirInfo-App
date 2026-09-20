@@ -20,6 +20,11 @@ class CertificationController extends BaseApiController
                     DB::raw("IFNULL(e.nom_etudiant,'')     as nom"),
                     DB::raw("IFNULL(e.prenom_etudiant,'')  as prenom"),
                     DB::raw("CONCAT(IFNULL(e.nom_etudiant,''),' ',IFNULL(e.prenom_etudiant,'')) as nom_complet"),
+                    // FIX : manquait totalement — l'ancien certificat FPDF affichait
+                    // "Né(e) le ... à ..." juste sous le nom. Nécessaire pour la
+                    // ligne ajoutée dans CertificatView (CertificationTab.tsx).
+                    'e.dn_etudiant as date_naissance',
+                    'e.ln_etudiant as lieu_naissance',
                     'c.code_module',
                     DB::raw("IFNULL(c.nom_formation, m.nom_module) as module_nom"),
                     'c.debut_session',
@@ -86,6 +91,71 @@ class CertificationController extends BaseApiController
         $c = DB::table('certificat')->where('reference', $id)->first();
         if (!$c) return $this->err('Non trouvé', 404);
         return response()->json($c);
+    }
+
+    // FIX (point 11) : modification d'une certification — corrige une
+    // erreur de saisie sans créer de doublon. On ne touche jamais à
+    // "reference" (identifiant stable) ni à "accept" (le statut de
+    // validation lui-même ne change que via valider()).
+    // FIX : autorisé même sur un certificat déjà validé (accept=1) — dans
+    // ce cas, si le prix change, on répercute la différence sur la
+    // transaction et le solde du compte déjà enregistrés (même logique
+    // que GererController::update), pour ne jamais laisser la
+    // comptabilité désynchronisée du certificat corrigé.
+    public function update(Request $request, $id)
+    {
+        $c = DB::table('certificat')->where('reference', $id)->orWhere('id', $id)->first();
+        if (!$c) return $this->err('Certificat non trouvé', 404);
+
+        $request->validate([
+            'matricule'   => 'sometimes|required|string|exists:etudiant,matricule_etudiant',
+            'code_module' => 'sometimes|required|string',
+            'prix'        => 'nullable|numeric|min:0',
+        ]);
+
+        $session = null;
+        if ($request->filled('code_session')) {
+            $session = DB::table('session')->where('code_session', $request->code_session)->first();
+        }
+
+        $nouveauPrix = $request->prix ?? $c->prix;
+
+        DB::beginTransaction();
+        try {
+            // Certificat déjà validé + prix modifié → ajuste la transaction
+            // et le solde du compte déjà crédités, au lieu de les laisser
+            // désynchronisés du nouveau prix.
+            if ((int) $c->accept === 1 && $c->id_transaction && (float) $nouveauPrix !== (float) $c->prix) {
+                $transaction = DB::table('transaction')->where('id_transaction', $c->id_transaction)->first();
+                if ($transaction) {
+                    DB::table('compte')->where('id_compte', $transaction->account)
+                        ->decrement('montant', $transaction->amount);
+                    DB::table('compte')->where('id_compte', $transaction->account)
+                        ->increment('montant', $nouveauPrix);
+                    DB::table('transaction')->where('id_transaction', $c->id_transaction)
+                        ->update(['amount' => $nouveauPrix]);
+                    DB::table('gestion_compte')->where('id_transaction', $c->id_transaction)
+                        ->update(['montant' => $nouveauPrix]);
+                }
+            }
+
+            DB::table('certificat')->where('id', $c->id)->update([
+                'matricule'     => $request->matricule     ?? $c->matricule,
+                'code_module'   => $request->code_module   ?? $c->code_module,
+                'debut_session' => $request->date_debut     ?? ($session?->debut_session ?? $c->debut_session),
+                'fin_session'   => $request->date_fin       ?? ($session?->fin_session   ?? $c->fin_session),
+                'nom_formation' => $request->nom_formation_certificat ?? $c->nom_formation,
+                'lieu_paiement' => $request->lieu_paiement  ?? $c->lieu_paiement,
+                'code_session'  => $request->code_session   ?? $c->code_session,
+                'prix'          => $nouveauPrix,
+            ]);
+
+            DB::commit();
+            return $this->ok('Certificat mis à jour avec succès');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Erreur lors de la modification', 'error' => $e->getMessage()], 500);
+        }
     }
 
     public function destroy($id)
@@ -181,6 +251,22 @@ class CertificationController extends BaseApiController
         ]);
 
         return $this->ok('Prix mis à jour avec succès.');
+    }
+
+    // FIX (point 2) : suppression d'une ligne de l'historique des prix —
+    // le tableau n'avait aucun moyen de retirer une entrée erronée. On
+    // empêche la suppression de la ligne la plus récente si c'est la
+    // seule qui existe (il doit toujours rester au moins un prix
+    // standard défini pour le calcul du prix par défaut dans store()).
+    public function deletePrixHistorique($id)
+    {
+        $total = DB::table('prix_certificat')->count();
+        if ($total <= 1) {
+            return $this->err("Impossible de supprimer : il doit rester au moins un prix standard défini.", 422);
+        }
+        $deleted = DB::table('prix_certificat')->where('id_prix_certificat', $id)->delete();
+        if (!$deleted) return $this->err('Entrée non trouvée', 404);
+        return $this->ok('Entrée supprimée avec succès.');
     }
 
     // ── Comptes disponibles (pour le select de validation) ──

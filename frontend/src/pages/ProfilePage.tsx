@@ -4,6 +4,17 @@ import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import { IconEyeOff, IconEye, IconUser, IconMail, IconPhone, IconSave, IconLock, IcoUsers } from '.././components/icons'
 
+// FIX : flèche retour — même dessin que celui utilisé dans Sidebar.tsx pour
+// rester cohérent visuellement.
+function SvgArrowLeft() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
+  )
+}
+
 
 
 function PwdInput({ label, value, onChange, placeholder }: {
@@ -90,7 +101,21 @@ export default function ProfilePage() {
   }
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto' }}>
+    // FIX : corps de la page décalé de 50px vers le bas (marginTop)
+    <div style={{ maxWidth: 760, margin: '0 auto', marginTop: 50 }}>
+
+      {/* FIX : bouton retour, cohérent avec la flèche du menu latéral */}
+      <button
+        type="button"
+        onClick={() => navigate(-1)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16,
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: '#2563eb', fontSize: 13, fontWeight: 600, padding: 0,
+        }}
+      >
+        <SvgArrowLeft /> Retour
+      </button>
 
       {/* ── En-tête profil ── */}
       <div className="card" style={{ marginBottom: 20, padding: '24px 28px' }}>

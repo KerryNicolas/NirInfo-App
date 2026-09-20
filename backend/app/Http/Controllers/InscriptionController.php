@@ -2,9 +2,13 @@
 namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\Concerns\GeneratesFactureNumero;
 
 class InscriptionController extends BaseApiController
 {
+    // FIX : même numérotation de facture que le module Facture — voir le trait.
+    use GeneratesFactureNumero;
+
     public function index(Request $request)
     {
         $query = DB::table('inscription as i')
@@ -21,6 +25,11 @@ class InscriptionController extends BaseApiController
                 'i.montant_paye',
                 'i.reste_a_payer      as reste',
                 'i.ref_facture',
+                // FIX : id brut du compte, nécessaire pour pré-remplir le
+                // select "Compte encaissement" en édition (avant, seul le
+                // libellé texte était renvoyé, impossible de le remapper
+                // fiablement vers un id_compte pour le formulaire).
+                'i.type_paiement      as id_compte',
                 DB::raw("IFNULL(c.libelle, i.type_paiement) as compte"),
                 'i.lieu_paiement',
                 DB::raw("CONCAT(IFNULL(sal.nom_s,''),' ',IFNULL(sal.prenom_s,'')) as editeur")
@@ -32,19 +41,9 @@ class InscriptionController extends BaseApiController
         );
     }
 
-    // ─── Numéro lisible "2026-0003", basé sur ref_facture (seule clé existante) ──
-    private function generateNumero(): string
-    {
-        $last = DB::table('facture')->orderByDesc('ref_facture')->first();
-
-        if ($last && !empty($last->numero_facture) && str_contains($last->numero_facture, '-')) {
-            [$year, $seq] = explode('-', $last->numero_facture);
-            if ($year == date('Y')) {
-                return $year . '-' . str_pad((int)$seq + 1, 4, '0', STR_PAD_LEFT);
-            }
-        }
-        return date('Y') . '-0001';
-    }
+    // FIX : recalculerResteAPayer() et ajusterSoldeCompte() sont désormais
+    // dans BaseApiController (partagées avec RecouvrementController, même
+    // table `inscription`) — plus de duplication.
 
     public function store(Request $request)
     {
@@ -56,48 +55,18 @@ class InscriptionController extends BaseApiController
             'lieu_paiement' => 'required|string',
         ]);
 
-        $session  = DB::table('session')->where('code_session', $request->code_session)->first();
-        $frais    = $session ? floatval($session->frais_module) : 0;
-        $dejaPaye = DB::table('inscription')
-            ->where('matricule_etudiant', $request->matricule)
-            ->where('code_session',       $request->code_session)
-            ->sum('montant_paye');
-        $reste = max(0, $frais - ($dejaPaye + floatval($request->montant_paye)));
-
         DB::beginTransaction();
         try {
-            // 1. Transaction financière (entrée d'argent)
-            $idTransaction = DB::table('transaction')->insertGetId([
-                'transaction_type' => 'E',
-                'amount'           => $request->montant_paye,
-                'reson'            => 'inscription',
-                'account'          => $request->id_compte,
-                'date_transaction' => now()->toDateString(),
-            ]);
+            $this->ajusterSoldeCompte((int)$request->id_compte, (float)$request->montant_paye, 'E', 'inscription');
 
-            // 2. Mise à jour du solde du compte
-            DB::table('compte')->where('id_compte', $request->id_compte)
-                ->increment('montant', $request->montant_paye);
-
-            DB::table('gestion_compte')->insert([
-                'id_compte'      => $request->id_compte,
-                'type'           => 'E',
-                'montant'        => $request->montant_paye,
-                'date_gestion'   => now()->toDateString(),
-                'id_transaction' => $idTransaction,
-            ]);
-
-            // ── FIX DEFINITIF : ref_facture est la cle primaire AUTO_INCREMENT de
-            // `facture`. On ne la genere JAMAIS manuellement (ni time(), ni chaine) —
-            // on laisse MySQL l'attribuer, puis on recupere l'ID genere avec insertGetId(). ──
-            $numero = $this->generateNumero();
-
+            $numero = $this->generateNumeroFacture();
             $refFacture = DB::table('facture')->insertGetId([
                 'numero_facture' => $numero,
                 'matricule_s'    => auth()->user()->matricule ?? null,
             ], 'ref_facture');
 
-            // 4. Inscription — utilise le ref_facture reellement genere par MySQL
+            // FIX : reste_a_payer inséré à 0 en placeholder — recalculé juste
+            // après par recalculerResteAPayer(), source unique de vérité.
             DB::table('inscription')->insert([
                 'matricule_etudiant' => $request->matricule,
                 'code_session'       => $request->code_session,
@@ -105,12 +74,12 @@ class InscriptionController extends BaseApiController
                 'montant_paye'       => $request->montant_paye,
                 'type_paiement'      => $request->id_compte,
                 'lieu_paiement'      => $request->lieu_paiement,
-                'reste_a_payer'      => $reste,
+                'reste_a_payer'      => 0,
                 'ref_facture'        => $refFacture,
-                'id_transaction'     => $idTransaction,
-                // ── FIX : capture de l'éditeur, absente jusqu'ici sur cette table ──
                 'matricule_s'        => auth()->user()->matricule ?? null,
             ]);
+
+            $this->recalculerResteAPayer($request->matricule, $request->code_session);
 
             DB::commit();
 
@@ -132,18 +101,91 @@ class InscriptionController extends BaseApiController
 
     public function update(Request $request, $id)
     {
-        DB::table('inscription')->where('id_paiement', $id)->update([
-            'montant_paye'  => $request->montant_paye,
-            'reste_a_payer' => $request->reste ?? 0,
-            'lieu_paiement' => $request->lieu_paiement,
+        $original = DB::table('inscription')->where('id_paiement', $id)->first();
+        if (!$original) return $this->err('Inscription non trouvée', 404);
+
+        $request->validate([
+            'matricule'     => 'sometimes|required|string|exists:etudiant,matricule_etudiant',
+            'code_session'  => 'sometimes|required|string|exists:session,code_session',
+            'montant_paye'  => 'sometimes|required|numeric|min:0',
+            'id_compte'     => 'sometimes|required|integer|exists:compte,id_compte',
+            'lieu_paiement' => 'sometimes|required|string',
         ]);
-        return $this->ok('Inscription mise à jour');
+
+        $newMatricule = $request->matricule    ?? $original->matricule_etudiant;
+        $newSession   = $request->code_session ?? $original->code_session;
+        $newMontant   = $request->has('montant_paye') ? floatval($request->montant_paye) : floatval($original->montant_paye);
+        $newCompte    = $request->id_compte    ?? (int)$original->type_paiement;
+        $newLieu      = $request->lieu_paiement ?? $original->lieu_paiement;
+
+        $matriculeChanged = $newMatricule !== $original->matricule_etudiant;
+        $sessionChanged   = $newSession   !== $original->code_session;
+        $montantChanged   = $newMontant   != floatval($original->montant_paye);
+        $compteChanged    = $newCompte    != (int)$original->type_paiement;
+
+        DB::beginTransaction();
+        try {
+            // FIX : si le montant ou le compte change, on reverse l'ancien
+            // mouvement et on applique le nouveau — au lieu d'écraser
+            // silencieusement le champ sans toucher au solde comme avant.
+            if ($montantChanged || $compteChanged) {
+                $this->ajusterSoldeCompte((int)$original->type_paiement, floatval($original->montant_paye), 'S', 'correction inscription #' . $id);
+                $this->ajusterSoldeCompte($newCompte, $newMontant, 'E', 'correction inscription #' . $id);
+            }
+
+            DB::table('inscription')->where('id_paiement', $id)->update([
+                'matricule_etudiant' => $newMatricule,
+                'code_session'       => $newSession,
+                'montant_paye'       => $newMontant,
+                'type_paiement'      => $newCompte,
+                'lieu_paiement'      => $newLieu,
+            ]);
+
+            // Si l'étudiant ou la session a changé, l'ANCIEN groupe perd ce
+            // paiement — sa chaîne doit être recalculée aussi (les paiements
+            // suivants de ce groupe avaient un reste_a_payer qui supposait
+            // que ce paiement leur appartenait toujours).
+            if ($matriculeChanged || $sessionChanged) {
+                $this->recalculerResteAPayer($original->matricule_etudiant, $original->code_session);
+            }
+            // Le nouveau groupe (qui peut être le même qu'avant si rien n'a
+            // changé côté étudiant/session, mais le montant si) est toujours
+            // recalculé.
+            $this->recalculerResteAPayer($newMatricule, $newSession);
+
+            DB::commit();
+            return $this->ok('Inscription mise à jour avec recalcul automatique');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Erreur lors de la mise à jour', 'error' => $e->getMessage()], 500);
+        }
     }
 
     public function destroy($id)
     {
-        DB::table('inscription')->where('id_paiement', $id)->delete();
-        return $this->ok('Inscription supprimée avec succès');
+        $row = DB::table('inscription')->where('id_paiement', $id)->first();
+        if (!$row) return $this->err('Inscription non trouvée', 404);
+
+        DB::beginTransaction();
+        try {
+            // FIX : reverse le solde du compte avant de supprimer — avant,
+            // l'argent restait comptabilisé pour toujours après suppression.
+            $this->ajusterSoldeCompte((int)$row->type_paiement, floatval($row->montant_paye), 'S', 'suppression inscription #' . $id);
+
+            DB::table('inscription')->where('id_paiement', $id)->delete();
+
+            // Recalcule ce qui reste dans ce groupe étudiant/session, en
+            // l'absence de ce paiement supprimé.
+            $this->recalculerResteAPayer($row->matricule_etudiant, $row->code_session);
+
+            DB::commit();
+            return $this->ok('Inscription supprimée avec succès');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Erreur lors de la suppression', 'error' => $e->getMessage()], 500);
+        }
     }
 
     // ── Liste des comptes (pour le select) ──

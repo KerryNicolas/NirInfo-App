@@ -57,6 +57,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Étudiants
     Route::post('/etudiants/{id}/photo', [EtudiantController::class, 'uploadPhoto']);
     Route::apiResource('etudiants',      EtudiantController::class);
+    Route::get('/etudiants/{id}', [EtudiantController::class, 'show']);
 
     // Paiements
     Route::get('/inscriptions/comptes', [InscriptionController::class, 'comptes']);
@@ -70,6 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/print-all',        [FactureController::class, 'printAll']);
         Route::get('/{reference}/print', [FactureController::class, 'print']);
         Route::delete('/{reference}',    [FactureController::class, 'destroy']);
+        Route::get('/factures/suggestions', [FactureController::class, 'suggestions']);
     });
 
     // Certification
@@ -83,6 +85,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('certifications',  CertificationController::class);
     Route::post('/certifications/{id}/valider', [CertificationController::class, 'valider'])
         ->middleware('permission:certifications.valider');
+    Route::get('/certifications/prix', [CertificationController::class, 'getPrix']);
+    Route::get('/certifications/prix/historique', [CertificationController::class, 'getPrixHistorique']);
+    Route::post('/certifications/prix', [CertificationController::class, 'setPrix']);
 
 
     // État & Échéance

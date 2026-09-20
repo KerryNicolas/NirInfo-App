@@ -1,112 +1,154 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import api from '../../api/axios'
 import toast from 'react-hot-toast'
-import {  IcoEdit, IcoPlus, IcoSave, IcoTrash, IcoX,  } from '../../components/icons'
+import { useTable } from '../../hooks/useTable'
+import Pagination from '../../components/Pagination'
+import ConfirmDialog from '../../components/ConfirmDialog'
+import { IcoEdit, IcoPlus, IcoSearch, IcoSave, IcoX, IcoTrash } from '../../components/icons'
 
-
-interface Fonction {
+export interface Fonction {
   id_fonction: number
   nom_fonction: string
   description_fonction: string
+  editeur?: string
 }
 
+const EMPTY_F = { nom_fonction: '', description_fonction: '' }
 
-const emptyForm = { nom_fonction: '', description_fonction: '' }
+// FIX : ce fichier était un composant orphelin — jamais importé nulle part,
+// PersonnelPage.tsx réimplémentait tout en interne à la place. On y déplace
+// maintenant la vraie logique (celle qui tournait dans PersonnelPage.tsx) :
+// useTable pour la pagination/recherche, ConfirmDialog pour la suppression,
+// et le détail au clic sur une ligne — au lieu de l'ancien fetch minimal
+// sans pagination ni recherche.
+function DetailModalFonction({ f, onClose }: { f: Fonction; onClose: () => void }) {
+  const rows: [string, string][] = [
+    ['Nom de la fonction', f.nom_fonction],
+    ['Description', f.description_fonction || '—'],
+    ['Éditeur', f.editeur?.trim() || '—'],
+  ]
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }} onClick={onClose}>
+      <div style={{ width:420, background:'white', borderRadius:12, padding:24 }} onClick={ev => ev.stopPropagation()}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+          <span style={{ fontWeight:700, fontSize:16 }}>Détail de la fonction</span>
+          <button onClick={onClose} className="btn-icon"><IcoX /></button>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:13 }}>
+          {rows.map(([label, val]) => (
+            <div key={label} style={{ display:'contents' }}>
+              <span style={{ color:'#64748b' }}>{label} :</span>
+              <span style={{ fontWeight:500 }}>{val}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function FonctionTab() {
-  const [fonctions, setFonctions] = useState<Fonction[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [form, setForm]           = useState({ ...emptyForm })
-  const [editId, setEditId]       = useState<number | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const fonctionTable = useTable<Fonction>('/fonctions', { perPage: 15 })
 
-  const load = () => {
-    setLoading(true)
-    api.get('/fonctions').then(r => setFonctions(r.data.data ?? r.data)).catch(() => {}).finally(() => setLoading(false))
-  }
-  useEffect(() => { load() }, [])
+  const [formF,    setFormF]    = useState(EMPTY_F)
+  const [editF,    setEditF]    = useState<Fonction | null>(null)
+  const [savingF,  setSavingF]  = useState(false)
+  const [viewingF, setViewingF] = useState<Fonction | null>(null)
+  const [confirmDeleteFonctionId, setConfirmDeleteFonctionId] = useState<number | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!form.nom_fonction) { toast.error('Le nom de la fonction est obligatoire'); return }
-    setSubmitting(true)
+  const resetFonction = () => { setFormF(EMPTY_F); setEditF(null) }
+
+  const handleSubmitFonction = async (e: React.FormEvent) => {
+    e.preventDefault(); setSavingF(true)
     try {
-      if (editId) { await api.put(`/fonctions/${editId}`, form); toast.success('Fonction modifiée') }
-      else { await api.post('/fonctions', form); toast.success('Fonction enregistrée') }
-      setForm({ ...emptyForm }); setEditId(null); load()
-    } catch { toast.error('Erreur lors de l\'enregistrement') }
-    finally { setSubmitting(false) }
+      if (editF) { await api.put(`/fonctions/${editF.id_fonction}`, formF); toast.success('Fonction modifiée') }
+      else       { await api.post('/fonctions', formF); toast.success('Fonction créée') }
+      setFormF(EMPTY_F); setEditF(null); fonctionTable.reload()
+    } catch (err: any) { toast.error(err.response?.data?.message ?? 'Erreur enregistrement') }
+    finally { setSavingF(false) }
   }
 
-  const handleEdit = (f: Fonction) => {
-    setEditId(f.id_fonction)
-    setForm({ nom_fonction: f.nom_fonction, description_fonction: f.description_fonction ?? '' })
-    window.scrollTo({ top:0, behavior:'smooth' })
+  const handleDeleteFonction = async () => {
+    if (!confirmDeleteFonctionId) return
+    try { await api.delete(`/fonctions/${confirmDeleteFonctionId}`); toast.success('Fonction supprimée'); fonctionTable.reload() }
+    catch (err: any) { toast.error(err.response?.data?.message ?? 'Erreur suppression') }
+    finally { setConfirmDeleteFonctionId(null) }
   }
-
-  const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer cette fonction ?')) return
-    try { await api.delete(`/fonctions/${id}`); toast.success('Fonction supprimée'); load() }
-    catch { toast.error('Erreur lors de la suppression') }
-  }
-
-  const inputStyle = { padding:'8px 12px', borderRadius:8, border:'1px solid #e2e8f0', fontSize:13, outline:'none', fontFamily:'inherit', background:'#fafbfc', width:'100%', boxSizing:'border-box' as const }
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
-      <div className="card">
+    <>
+      <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-header">
-          <span className="card-title">{editId ? 'Modifier la fonction' : 'Nouvelle fonction'}</span>
-          {editId && <button onClick={() => { setForm({ ...emptyForm }); setEditId(null) }} style={{ display:'flex', alignItems:'center', gap:5, background:'#f1f5f9', color:'#64748b', border:'1px solid #e2e8f0', borderRadius:7, padding:'5px 10px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoX /> Annuler</button>}
+          <span className="card-title" style={{ display:'flex', alignItems:'center', gap:7 }}>
+            {editF ? <IcoEdit /> : <IcoPlus />} {editF ? 'Modifier la fonction' : 'Nouvelle fonction'}
+          </span>
+          {/* FIX : style harmonisé avec le bouton Annuler d'Étudiant */}
+          {editF && <button className="btn btn-sm" onClick={resetFonction} style={{ display:'flex', alignItems:'center', gap:5, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca' }}><IcoX /> Annuler</button>}
         </div>
-        <form onSubmit={handleSubmit} style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px 18px' }}>
-          <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-            <label style={{ fontSize:12, fontWeight:600, color:'#374151' }}>Nom de la fonction <span style={{ color:'#ef4444' }}>*</span></label>
-            <input value={form.nom_fonction} onChange={e => setForm(f => ({ ...f, nom_fonction: e.target.value }))} placeholder="Ex: Directeur, Formateur..." style={inputStyle} onFocus={e => e.target.style.borderColor='#3b82f6'} onBlur={e => e.target.style.borderColor='#e2e8f0'} />
-          </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-            <label style={{ fontSize:12, fontWeight:600, color:'#374151' }}>Description</label>
-            <input value={form.description_fonction} onChange={e => setForm(f => ({ ...f, description_fonction: e.target.value }))} placeholder="Description optionnelle..." style={inputStyle} onFocus={e => e.target.style.borderColor='#3b82f6'} onBlur={e => e.target.style.borderColor='#e2e8f0'} />
-          </div>
-          <div style={{ gridColumn:'1/-1', display:'flex', justifyContent:'flex-end' }}>
-            <button type="submit" disabled={submitting}
-              style={{ display:'flex', alignItems:'center', gap:7, background: editId ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'linear-gradient(135deg,#1e40af,#2563eb)', color:'white', border:'none', borderRadius:9, padding:'9px 22px', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 2px 10px rgba(30,64,175,0.3)', opacity: submitting ? 0.7 : 1 }}>
-              <IcoSave /> {submitting ? 'Enregistrement...' : (editId ? 'Modifier' : 'Enregistrer')}
+        <div className="card-body">
+          <form onSubmit={handleSubmitFonction}>
+            <div className="form-group">
+              <label className="form-label">Nom de la fonction </label>
+              <input className="form-control" value={formF.nom_fonction} onChange={e => setFormF({...formF, nom_fonction:e.target.value})} required placeholder="Ex: Formateur..." />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Description</label>
+              <input className="form-control" value={formF.description_fonction} onChange={e => setFormF({...formF, description_fonction:e.target.value})} placeholder="Description optionnelle..." />
+            </div>
+            <button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:6 }} disabled={savingF}>
+              {savingF ? <><span className="spinner" style={{ width:14, height:14, borderWidth:2 }} /> Enregistrement…</> : editF ? <><IcoSave /> Mettre à jour</> : <><IcoPlus /> Enregistrer</>}
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Liste des fonctions</span>
-          <button onClick={() => { setForm({ ...emptyForm }); setEditId(null); window.scrollTo({top:0,behavior:'smooth'}) }} style={{ display:'flex', alignItems:'center', gap:6, background:'linear-gradient(135deg,#1e40af,#2563eb)', color:'white', border:'none', borderRadius:8, padding:'7px 14px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 2px 8px rgba(30,64,175,0.25)' }}><IcoPlus /> Nouvelle fonction</button>
+          <div className="section-info">
+            <div className="section-title">Liste des fonction(s)</div>
+            <div className="section-count">{fonctionTable.meta.total > 0 ? `${fonctionTable.meta.total} fonction(s)` : `${fonctionTable.data.length} fonction(s)`}</div>
+          </div>
+          <div className="search-bar">
+            <IcoSearch />
+            <input placeholder="Mot à rechercher..." value={fonctionTable.search} onChange={e => fonctionTable.setSearch(e.target.value)} />
+            {fonctionTable.search && <button onClick={() => fonctionTable.setSearch('')} style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', padding:0, fontSize:16 }}>×</button>}
+          </div>
         </div>
         <div className="table-wrapper">
-          {loading ? <div className="loading-center"><div className="spinner"/></div> : (
+          {fonctionTable.loading ? <div className="loading-center"><div className="spinner" /> Chargement…</div> : (
             <table>
               <thead><tr><th>#</th><th>Nom de la fonction</th><th>Description</th><th>Action</th></tr></thead>
               <tbody>
-                {fonctions.length === 0 ? (
-                  <tr><td colSpan={4} style={{ textAlign:'center', padding:'32px 0', color:'#94a3b8', fontSize:13 }}>Aucune fonction enregistrée</td></tr>
-                ) : fonctions.map((f, i) => (
-                  <tr key={f.id_fonction}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{i+1}</td>
-                    <td style={{ fontWeight:600, color:'#1e293b' }}>{f.nom_fonction}</td>
-                    <td style={{ color:'#64748b', fontSize:12 }}>{f.description_fonction || '—'}</td>
-                    <td>
-                      <div style={{ display:'flex', gap:5 }}>
-                        <button onClick={() => handleEdit(f)} style={{ display:'flex', alignItems:'center', gap:4, background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe', borderRadius:6, padding:'5px 9px', fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoEdit /> Modifier</button>
-                        <button onClick={() => handleDelete(f.id_fonction)} style={{ display:'flex', alignItems:'center', gap:4, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca', borderRadius:6, padding:'5px 9px', fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoTrash /> Suppr.</button>
-                      </div>
-                    </td>
+                {fonctionTable.data.length === 0 ? (
+                  <tr><td colSpan={4}><div className="empty-state">{fonctionTable.search ? `Aucun résultat pour « ${fonctionTable.search} »` : 'Aucune fonction créée'}</div></td></tr>
+                ) : fonctionTable.data.map((f, i) => (
+                  <tr key={f.id_fonction} onClick={() => setViewingF(f)} style={{ cursor:'pointer' }}>
+                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(fonctionTable.meta.current_page-1)*fonctionTable.meta.per_page+i+1}</td>
+                    <td style={{ fontWeight:600 }}>{f.nom_fonction}</td>
+                    <td style={{ fontSize:12, color:'#64748b' }}>{f.description_fonction || '—'}</td>
+                    <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
+                      <button className="btn-icon edit" onClick={() => { setEditF(f); setFormF({ nom_fonction:f.nom_fonction, description_fonction:f.description_fonction??'' }); window.scrollTo({top:0,behavior:'smooth'}) }}><IcoEdit /></button>
+                      <button className="btn-icon delete" onClick={() => setConfirmDeleteFonctionId(f.id_fonction)}><IcoTrash /></button>
+                    </div></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
         </div>
+        {!fonctionTable.loading && fonctionTable.meta.total > 0 && <Pagination meta={fonctionTable.meta} onPage={fonctionTable.setPage} onPerPage={fonctionTable.setPerPage} />}
       </div>
-    </div>
+
+      {viewingF && <DetailModalFonction f={viewingF} onClose={() => setViewingF(null)} />}
+
+      <ConfirmDialog
+        open={!!confirmDeleteFonctionId}
+        title="Supprimer cette fonction ?"
+        message="Cette fonction sera définitivement supprimée. Cette action est irréversible."
+        confirmLabel="Supprimer"
+        onConfirm={handleDeleteFonction}
+        onCancel={() => setConfirmDeleteFonctionId(null)}
+      />
+    </>
   )
 }

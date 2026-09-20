@@ -11,7 +11,12 @@ export default function CreateUserPage() {
   const { isAdmin } = useAuth()
 
   const [roles, setRoles]       = useState<Role[]>([])
-  const [name, setName]         = useState('')
+  // FIX : "Nom complet" scindé en Nom + Prénom séparés — nécessaire pour
+  // créer automatiquement la ligne `salarie` correspondante côté backend
+  // (nom_s/prenom_s), qui elle-même résout le champ "Éditeur" vide partout
+  // dans l'appli pour tout nouveau compte.
+  const [nom, setNom]           = useState('')
+  const [prenom, setPrenom]     = useState('')
   const [email, setEmail]       = useState('')
   const [roleId, setRoleId]     = useState('')
   const [password, setPassword] = useState('')
@@ -35,11 +40,11 @@ export default function CreateUserPage() {
     setLoading(true)
     try {
       await api.post('/users', {
-        name, email, role_id: roleId,
+        nom, prenom, email, role_id: roleId,
         password, password_confirmation: confirm,
       })
-      toast.success(`Compte créé avec succès pour ${name}`)
-      setName(''); setEmail(''); setRoleId(''); setPassword(''); setConfirm('')
+      toast.success(`Compte créé avec succès pour ${nom} ${prenom}`)
+      setNom(''); setPrenom(''); setEmail(''); setRoleId(''); setPassword(''); setConfirm('')
     } catch (err: any) {
       const message = err.response?.data?.message
       const errors  = err.response?.data?.errors || {}
@@ -61,15 +66,23 @@ export default function CreateUserPage() {
         <div className="card-body">
           <form onSubmit={handleSubmit}>
 
-            <div className="form-group">
-              <label className="form-label">Nom complet</label>
-              <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', display: 'flex', pointerEvents: 'none' }}>
-                  <IconUser />
-                </span>
-                <input className="form-control" style={{ paddingLeft: 34 }}
-                  value={name} onChange={e => setName(e.target.value)}
-                  required placeholder="Prénom et nom" />
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Nom</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', display: 'flex', pointerEvents: 'none' }}>
+                    <IconUser />
+                  </span>
+                  <input className="form-control" style={{ paddingLeft: 34 }}
+                    value={nom} onChange={e => setNom(e.target.value)}
+                    required placeholder="Nom de famille" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Prénom</label>
+                <input className="form-control"
+                  value={prenom} onChange={e => setPrenom(e.target.value)}
+                  required placeholder="Prénom" />
               </div>
             </div>
 

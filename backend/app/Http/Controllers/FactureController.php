@@ -4,18 +4,15 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\Concerns\GeneratesFactureNumero;
 
 class FactureController extends Controller
 {
-    private function generateNumero(): string
-    {
-        $last = DB::table('facture')->orderBy('ref_facture', 'desc')->first();
-        if (!$last) {
-            return date('Y') . '-0001';
-        }
-        [$year, $seq] = explode('-', $last->numero_facture);
-        return $year . '-' . str_pad((int)$seq + 1, 4, '0', STR_PAD_LEFT);
-    }
+    // FIX : même numérotation que l'inscription — l'ancienne version ici ne
+    // repartait jamais à "-0001" au changement d'année (bug), et surtout
+    // dupliquait une logique presque identique à celle d'Inscription. Les
+    // deux passent maintenant par le même trait, donc par le même calcul.
+    use GeneratesFactureNumero;
 
     private function createFacture(string $reference, string $numero, string $matricule): void
     {
@@ -24,6 +21,44 @@ class FactureController extends Controller
             'numero_facture' => $numero,
             'matricule_s'    => $matricule,
         ]);
+    }
+
+    // FIX : nouvel endpoint léger, lecture seule — pour l'autocomplétion des
+    // champs Référence/Numéro/Matricule sur FacturePage.tsx. Recherche sur
+    // numero_facture, ref_facture, matricule ou nom/prénom de l'étudiant,
+    // limité à 10 résultats. N'existait pas avant — aucune modification de
+    // la logique métier existante (verify/print/generate inchangés).
+    public function suggestions(Request $request)
+    {
+        $q = trim((string) $request->input('search', ''));
+        if (mb_strlen($q) < 1) {
+            return response()->json(['data' => []]);
+        }
+
+        $results = DB::table('facture as fac')
+            ->join('inscription as ins', 'fac.ref_facture', '=', 'ins.ref_facture')
+            ->join('etudiant as etu',    'etu.matricule_etudiant', '=', 'ins.matricule_etudiant')
+            ->where(function ($sub) use ($q) {
+                $sub->where('fac.numero_facture', 'like', "%{$q}%")
+                    ->orWhere('fac.ref_facture', 'like', "%{$q}%")
+                    ->orWhere('ins.matricule_etudiant', 'like', "%{$q}%")
+                    ->orWhere('etu.nom_etudiant', 'like', "%{$q}%")
+                    ->orWhere('etu.prenom_etudiant', 'like', "%{$q}%");
+            })
+            ->select(
+                'fac.ref_facture',
+                'fac.numero_facture',
+                'ins.matricule_etudiant as matricule',
+                'ins.code_session',
+                'etu.nom_etudiant  as nom',
+                'etu.prenom_etudiant as prenom'
+            )
+            ->distinct()
+            ->orderBy('fac.ref_facture', 'desc')
+            ->limit(10)
+            ->get();
+
+        return response()->json(['data' => $results]);
     }
 
     // ─── Lecture complète d'une facture par référence — colonnes explicites ──
@@ -234,7 +269,7 @@ class FactureController extends Controller
             $reference = $facExistante->ref_facture;
             $numero    = $facExistante->numero_facture;
         } else {
-            $numero    = $this->generateNumero();
+            $numero    = $this->generateNumeroFacture();
             $reference = $inscription->ref_facture; // ← on lie la facture à la référence déjà générée par l'inscription
             $this->createFacture($reference, $numero, auth()->user()->matricule ?? 'SYSTEM');
         }

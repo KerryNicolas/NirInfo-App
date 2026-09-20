@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import Logo from '../assets/logo.png'
@@ -75,10 +75,14 @@ export default function LoginPage() {
               </button>
             </div>
 
-            {/* Mot de passe oublié */}
+            {/* Mot de passe oublié — DÉSACTIVÉ jusqu'à nouvel ordre.
+                Décommenter le bloc ci-dessous (et remettre l'import de Link
+                en haut du fichier) pour le réactiver. */}
+            {/*
             <div className="auth-forgot">
               <Link to="/forgot-password">Mot de passe oublié ?</Link>
             </div>
+            */}
 
             {/* Bouton connexion */}
             <button type="submit" className="auth-btn" disabled={loading}>

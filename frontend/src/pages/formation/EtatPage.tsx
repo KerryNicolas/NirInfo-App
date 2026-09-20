@@ -2,13 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import Sidebar from '../../components/Sidebar'
 import api from '../../api/axios'
 import toast from 'react-hot-toast'
-import { useTable } from '../../hooks/useTable'
+import { useModuleSuggestions } from '../../hooks/useModuleSuggestions'
 import Pagination from '../../components/Pagination'
-import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend
-} from 'recharts'
 import { IcoSearch, IcoBarChart, IcoExcel, IcoFilter, IcoMoney } from '../../components/icons'
 
 
@@ -40,15 +35,20 @@ interface EtatRow {
   lieu_paiement: string
   editeur: string
 }
-interface RevenusItem      { mois: string; revenus: number }
-interface InscriptionItem  { mois: string; count: number  }
-interface LieuItem         { name: string; value: number  }
-
-// ── Couleurs camembert ───────────────────────────────────────────────────────
-const PIE_COLORS = ['#2563eb', '#16a34a', '#ea580c', '#7c3aed', '#0891b2']
+interface EtatMeta {
+  current_page: number
+  per_page: number
+  total: number
+  last_page: number
+  from: number
+  to: number
+  [key: string]: unknown
+}
 
 // ── Constante date ───────────────────────────────────────────────────────────
 const today = new Date().toISOString().split('T')[0]
+
+const EMPTY_META: EtatMeta = { current_page: 1, per_page: 15, total: 0, last_page: 1, from: 0, to: 0 }
 
 // ── Composant principal ──────────────────────────────────────────────────────
 export default function EtatPage() {
@@ -58,32 +58,11 @@ export default function EtatPage() {
   const [inscriptions, setInscriptions] = useState<Inscription[]>([])
   const [statsLoading, setStatsLoading] = useState(true)
 
-  // ── Graphiques ─────────────────────────────────────────────────────────────
-  const [revenusData,      setRevenusData]      = useState<RevenusItem[]>([])
-  const [inscriptionsData, setInscriptionsData] = useState<InscriptionItem[]>([])
-  const [lieuxData,        setLieuxData]        = useState<LieuItem[]>([])
-  const [chartsLoading,    setChartsLoading]    = useState(true)
-
-  // ── Filtres État ───────────────────────────────────────────────────────────
-  const [form, setForm] = useState({
-    date_debut: today,
-    date_fin:   today,
-    module:     '',
-    lieu:       'Tous',
-  })
-  const [activeParams,  setActiveParams]  = useState<Record<string, string>>({})
-  const [totalMontant,  setTotalMontant]  = useState(0)
-  const [searched,      setSearched]      = useState(false)
-
-  const table = useTable<EtatRow>('/etat', {
-    perPage:  15,
-    params:   activeParams,
-    autoLoad: false,
-  })
-
-  // ── Chargement stats + graphiques au montage ───────────────────────────────
+  // ── Chargement stats au montage ─────────────────────────────────────────────
+  // Inchangé : cet appel part en parallèle du reste, n'est plus bloquant pour
+  // rien d'autre sur la page, et n'a plus de spinner plein cadre (voir plus
+  // bas) — juste rien affiché tant que ça charge.
   useEffect(() => {
-    // Stats KPI + dernières inscriptions
     api.get('/dashboard/stats')
       .then(r => {
         setStats(r.data.stats ?? r.data)
@@ -94,24 +73,56 @@ export default function EtatPage() {
         setInscriptions([])
       })
       .finally(() => setStatsLoading(false))
+  }, [])
 
-    // Données graphiques
-    api.get('/dashboard/charts')
-      .then(r => {
-        setRevenusData(r.data.revenus      ?? [])
-        setInscriptionsData(r.data.inscriptions ?? [])
-        setLieuxData(r.data.lieux          ?? [])
-      })
-      .catch(() => {
-        setRevenusData([])
-        setInscriptionsData([])
-        setLieuxData([])
-      })
-      .finally(() => setChartsLoading(false))
+  // ── Filtres État ───────────────────────────────────────────────────────────
+  const [form, setForm] = useState({
+    date_debut: today,
+    date_fin:   today,
+    module:     '',
+    lieu:       'Tous',
+  })
+  const [totalMontant, setTotalMontant] = useState(0)
+  const [searched,     setSearched]     = useState(false)
+  const [moduleQuery,  setModuleQuery]  = useState('')
+  const moduleSuggestions = useModuleSuggestions(moduleQuery)
+
+  // FIX PERFORMANCE : on n'utilise plus useTable() ici. useTable() ne renvoie
+  // que les données paginées — le total_montant (agrégat sur TOUTE la
+  // sélection filtrée, pas seulement la page affichée) doit venir de la même
+  // réponse /etat que le backend renvoie déjà (voir EtatController::index,
+  // champ total_montant). Avec useTable(), il n'y avait aucun moyen de lire ce
+  // champ supplémentaire depuis le hook, donc handleValider() faisait un
+  // DEUXIÈME appel réseau manuel à /etat avec les mêmes paramètres, juste pour
+  // lire total_montant — doublant purement et simplement le travail du
+  // serveur (et le temps d'attente) à chaque clic sur "Valider". En gérant
+  // l'état de la table nous-mêmes ici, un seul appel réseau suffit pour tout :
+  // lignes, pagination ET total_montant.
+  const [rows,    setRows]    = useState<EtatRow[]>([])
+  const [meta,    setMeta]    = useState<EtatMeta>(EMPTY_META)
+  const [loading, setLoading] = useState(false)
+  const [queryParams, setQueryParams] = useState<Record<string, string>>({})
+
+  const fetchEtat = useCallback(async (page: number, perPage: number, params: Record<string, string>) => {
+    setLoading(true)
+    try {
+      const r = await api.get('/etat', { params: { ...params, page, per_page: perPage } })
+      const { data, ...rest } = r.data
+      setRows(Array.isArray(data) ? data : [])
+      setMeta(rest as EtatMeta)
+      setTotalMontant(r.data.total_montant ?? 0)
+    } catch {
+      setRows([])
+      setMeta(EMPTY_META)
+      setTotalMontant(0)
+      toast.error('Erreur lors du chargement des données')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   // ── Valider filtres État ───────────────────────────────────────────────────
-  const handleValider = useCallback(async () => {
+  const handleValider = useCallback(() => {
     const params: Record<string, string> = {}
     if (form.date_debut)      params.date_debut = form.date_debut
     if (form.date_fin)        params.date_fin   = form.date_fin
@@ -119,29 +130,29 @@ export default function EtatPage() {
     if (form.lieu !== 'Tous') params.lieu       = form.lieu
 
     setSearched(true)
+    setQueryParams(params)
+    void fetchEtat(1, meta.per_page, params)
+  }, [form, meta.per_page, fetchEtat])
 
-    try {
-      const r = await api.get('/etat', { params: { ...params, per_page: 15, page: 1 } })
-      setTotalMontant(r.data.total_montant ?? 0)
-    } catch {
-      setTotalMontant(0)
-    }
+  const handlePage = useCallback((page: number) => {
+    void fetchEtat(page, meta.per_page, queryParams)
+  }, [meta.per_page, queryParams, fetchEtat])
 
-    setActiveParams(params)
-    setTimeout(() => table.reload(), 50)
-  }, [form, table])
+  const handlePerPage = useCallback((perPage: number) => {
+    void fetchEtat(1, perPage, queryParams)
+  }, [queryParams, fetchEtat])
 
   // ── Export CSV ─────────────────────────────────────────────────────────────
   const exportExcel = () => {
-    if (table.data.length === 0) { toast.error('Aucune donnée à exporter'); return }
+    if (rows.length === 0) { toast.error('Aucune donnée à exporter'); return }
     const header = ['Date', 'Matricule', 'Nom', 'Prénom', 'Session', 'Montant', 'Type paiement', 'Lieu', 'Éditeur']
-    const data   = table.data.map(r => [
+    const data   = rows.map(r => [
       r.date_transaction, r.matricule, r.nom, r.prenom,
       r.code_session, String(r.montant), r.type_paiement, r.lieu_paiement, r.editeur
     ])
     const csv  = [header, ...data].map(r => r.map(v => `"${v ?? ''}"`).join(',')).join('\n')
     const a    = document.createElement('a')
-    a.href     = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }))
+    a.href     = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
     a.download = `etat_${form.date_debut}_${form.date_fin}.csv`
     a.click()
     toast.success('Export téléchargé')
@@ -167,10 +178,11 @@ export default function EtatPage() {
 
           {/* ══════════════════════════════════════════════════════════════
               SECTION 1 — KPI Cards
+              FIX : plus de spinner plein cadre — tant que statsLoading est
+              vrai, rien n'est affiché ici (page "vide" à cet endroit) plutôt
+              qu'un indicateur de chargement, conformément à la demande.
           ══════════════════════════════════════════════════════════════ */}
-          {statsLoading ? (
-            <div className="loading-center"><div className="spinner" /> Chargement des statistiques…</div>
-          ) : (
+          {!statsLoading && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 20 }}>
               {[
                 {
@@ -212,129 +224,7 @@ export default function EtatPage() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════
-              SECTION 2 — Graphiques (vraies données API)
-          ══════════════════════════════════════════════════════════════ */}
-          {/* {chartsLoading ? (
-            <div className="loading-center"><div className="spinner" /> Chargement des graphiques…</div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.6fr', gap: 16, marginBottom: 24 }}>
-
-              {/* Courbe revenus mensuels */}
-              {/*
-              <div className="card" style={{ padding: '16px 20px' }}>
-                <div className="card-header" style={{ marginBottom: 12 }}>
-                  <span className="card-title">Revenus mensuels</span>
-                  <span className="badge badge-info">{new Date().getFullYear()}</span>
-                </div>
-                {revenusData.length === 0 ? (
-                  <div className="empty-state">Aucune donnée disponible</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={180}>
-                    <AreaChart data={revenusData}>
-                      <defs>
-                        <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#2563eb" stopOpacity={0.15} />
-                          <stop offset="95%" stopColor="#2563eb" stopOpacity={0}    />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis
-                        dataKey="mois"
-                        tick={{ fontSize: 11, fill: '#94a3b8' }}
-                        axisLine={false} tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 10, fill: '#94a3b8' }}
-                        axisLine={false} tickLine={false}
-                        tickFormatter={(v: number) => (v / 1000) + 'k'}
-                      />
-                      <Tooltip
-                        formatter={(v: unknown) => [fmt(Number(v)) + ' Ar', 'Revenus']}
-                        contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="revenus"
-                        stroke="#2563eb"
-                        strokeWidth={2}
-                        fill="url(#colorRev)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-
-              {/* Barres inscriptions par mois */}
-            {/*   <div className="card" style={{ padding: '16px 20px' }}>
-                <div className="card-header" style={{ marginBottom: 12 }}>
-                  <span className="card-title">Inscriptions / mois</span>
-                  <span className="badge badge-success">{new Date().getFullYear()}</span>
-                </div>
-                {inscriptionsData.length === 0 ? (
-                  <div className="empty-state">Aucune donnée disponible</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={inscriptionsData} barSize={14}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis
-                        dataKey="mois"
-                        tick={{ fontSize: 11, fill: '#94a3b8' }}
-                        axisLine={false} tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 10, fill: '#94a3b8' }}
-                        axisLine={false} tickLine={false}
-                      />
-                      <Tooltip
-                        formatter={(v: unknown) => [Number(v), 'Inscriptions']}
-                        contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
-                      />
-                      <Bar dataKey="count" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-
-              {/* Camembert répartition par lieu */}
-              {/* <div className="card" style={{ padding: '16px 20px' }}>
-                <div className="card-header" style={{ marginBottom: 4 }}>
-                  <span className="card-title">Par lieu</span>
-                </div>
-                {lieuxData.length === 0 ? (
-                  <div className="empty-state">Aucune donnée disponible</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={180}>
-                    <PieChart>
-                      <Pie
-                        data={lieuxData}
-                        cx="50%" cy="50%"
-                        innerRadius={40} outerRadius={70}
-                        paddingAngle={3}
-                        dataKey="value"
-                      >
-                        {lieuxData.map((_, i) => (
-                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(v: unknown) => [Number(v), 'Paiements']}
-                        contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
-                      />
-                      <Legend
-                        iconType="circle"
-                        iconSize={8}
-                        formatter={(v) => <span style={{ fontSize: 11, color: '#64748b' }}>{v}</span>}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-
-            </div>
-          )} */}
-
-          {/* ══════════════════════════════════════════════════════════════
-              SECTION 3 — Dernières inscriptions
+              SECTION 2 — Dernières inscriptions
           ══════════════════════════════════════════════════════════════ */}
           {!statsLoading && (
             <div className="card" style={{ marginBottom: 24 }}>
@@ -389,7 +279,7 @@ export default function EtatPage() {
           )}
 
           {/* ══════════════════════════════════════════════════════════════
-              SECTION 4 — Filtres + Tableau État
+              SECTION 3 — Filtres
           ══════════════════════════════════════════════════════════════ */}
           <div className="card" style={{ marginBottom: 20 }}>
             <div className="card-header">
@@ -409,7 +299,22 @@ export default function EtatPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Module</label>
-                  <input className="form-control" value={form.module} onChange={set('module')} placeholder="Tous les modules" />
+                  <input
+                    className="form-control"
+                    list="module-suggestions-etat"
+                    value={moduleQuery}
+                    onChange={e => {
+                      const v = e.target.value
+                      setModuleQuery(v)
+                      const match = moduleSuggestions.find(m => m.nom === v)
+                      setForm(p => ({ ...p, module: match ? match.code_module : '' }))
+                    }}
+                    placeholder="Tous les modules — tapez pour filtrer" />
+                  <datalist id="module-suggestions-etat">
+                    {moduleSuggestions.map(m => (
+                      <option key={m.code_module} value={m.nom}>{m.code_module}</option>
+                    ))}
+                  </datalist>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Lieu</label>
@@ -422,16 +327,17 @@ export default function EtatPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
+                {/* FIX : plus d'indicateur de chargement sur ce bouton — juste
+                    désactivé pendant la requête (évite le double-clic), sans
+                    spinner ni texte "Chargement…", conformément à la demande
+                    de ne plus afficher d'indicateur de chargement. */}
                 <button
                   className="btn btn-primary"
                   style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                   onClick={handleValider}
-                  disabled={table.loading}
+                  disabled={loading}
                 >
-                  {table.loading
-                    ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Chargement…</>
-                    : <><IcoSearch /> Valider</>
-                  }
+                  <IcoSearch /> Valider
                 </button>
                 <button
                   className="btn btn-success"
@@ -455,23 +361,27 @@ export default function EtatPage() {
                 <p style={{ fontSize: 24, fontWeight: 800, color: '#16a34a' }}>{fmt(totalMontant)} Ar</p>
               </div>
               <div style={{ marginLeft: 'auto' }}>
-                <span className="badge badge-info">{table.meta.total} entrée(s)</span>
+                <span className="badge badge-info">{meta.total} entrée(s)</span>
               </div>
             </div>
           )}
 
-          {/* Tableau État */}
+          {/* ══════════════════════════════════════════════════════════════
+              SECTION 4 — Tableau État
+              FIX : plus de spinner plein cadre pendant le chargement — le
+              tableau est simplement vide (rien affiché) le temps de la
+              requête, conformément à la demande explicite de préférer une
+              zone vide à un indicateur de chargement.
+          ══════════════════════════════════════════════════════════════ */}
           <div className="card">
             <div className="card-header">
               <span className="card-title">Liste des entrées</span>
-              {table.meta.total > 0 && (
-                <span className="badge badge-success">{table.meta.total} enregistrement(s)</span>
+              {meta.total > 0 && (
+                <span className="badge badge-success">{meta.total} enregistrement(s)</span>
               )}
             </div>
             <div className="table-wrapper">
-              {table.loading ? (
-                <div className="loading-center"><div className="spinner" /> Chargement…</div>
-              ) : (
+              {!loading && (
                 <table>
                   <thead>
                     <tr>
@@ -481,7 +391,7 @@ export default function EtatPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {table.data.length === 0 ? (
+                    {rows.length === 0 ? (
                       <tr>
                         <td colSpan={10}>
                           <div className="empty-state">
@@ -491,10 +401,10 @@ export default function EtatPage() {
                           </div>
                         </td>
                       </tr>
-                    ) : table.data.map((r, i) => (
+                    ) : rows.map((r, i) => (
                       <tr key={r.id_paiement}>
                         <td style={{ color: '#94a3b8', fontSize: 12 }}>
-                          {(table.meta.current_page - 1) * table.meta.per_page + i + 1}
+                          {(meta.current_page - 1) * meta.per_page + i + 1}
                         </td>
                         <td style={{ fontSize: 12 }}>{r.date_transaction}</td>
                         <td><span className="badge badge-info">{r.matricule}</span></td>
@@ -511,11 +421,11 @@ export default function EtatPage() {
                 </table>
               )}
             </div>
-            {!table.loading && table.meta.total > 0 && (
+            {!loading && meta.total > 0 && (
               <Pagination
-                meta={table.meta}
-                onPage={table.setPage}
-                onPerPage={table.setPerPage}
+                meta={meta}
+                onPage={handlePage}
+                onPerPage={handlePerPage}
               />
             )}
           </div>

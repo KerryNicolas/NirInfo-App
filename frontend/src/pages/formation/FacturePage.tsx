@@ -1,33 +1,38 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Sidebar from '../../components/Sidebar'
 import api from '../../api/axios'
 import toast from 'react-hot-toast'
-import { IcoDoc, IcoSession, IcoPrint } from '../../components/icons'
-
-interface FactureData {
-  reference: string; numero: string
-  etudiant: { matricule: string; nom: string; prenom: string; telephone: string; email: string }
-  session: { code_session: string; module_nom: string; date_debut: string; date_fin: string; frais_formation: number; lieu: string; horaire_desc: string }
-  inscription: { montant_paye: number; somme_deja_paye: number; total_paye: number; reste: number; date_paiement: string; compte: string }
-  date_facture: string
-  centre: { nom: string; adresse: string; tel: string; email: string }
-}
+import { useFactureSuggestions } from '../../hooks/useFactureSuggestions'
+import { useMatriculeSuggestions } from '../../hooks/useMatriculeSuggestions'
+import { useSessionSuggestions } from '../../hooks/useSessionSuggestions'
+import { IcoDoc, IcoSession } from '../../components/icons'
+// FIX : la présentation de la facture (logo, tableau, montant en lettres,
+// impression A5...) vit maintenant dans un seul composant partagé,
+// components/FactureInvoice.tsx — le même utilisé juste après une
+// inscription (InscriptionTab.tsx). Avant, ce fichier avait sa propre copie
+// dupliquée de tout ce rendu, qui pouvait diverger de l'aperçu affiché
+// ailleurs dans l'appli ; maintenant il n'existe qu'à un seul endroit.
+import FactureInvoice, { FactureData } from '../../components/FactureInvoice'
 
 export default function FacturePage() {
-  const [sessions, setSessions] = useState<{ code_session: string }[]>([])
-  const [loadingSessions, setLoadingSessions] = useState(true)
   const [form, setForm] = useState({
     reference: '', numero: '', matricule: '', code_session: '', date_paiement: ''
   })
   const [factures, setFactures] = useState<FactureData[]>([])
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    api.get('/sessions', { params: { per_page: 500 } })
-      .then(r => setSessions(r.data.data ?? []))
-      .catch(() => {})
-      .finally(() => setLoadingSessions(false))
-  }, [])
+  // FIX : autocomplétion sur les 4 champs de recherche — remplace le
+  // chargement complet de /sessions (500 lignes d'un coup) et les champs
+  // texte libre sans aucune suggestion pour référence/numéro/matricule.
+  const [refQuery, setRefQuery] = useState('')
+  const refSuggestions = useFactureSuggestions(refQuery)
+  const [numeroQuery, setNumeroQuery] = useState('')
+  const numeroSuggestions = useFactureSuggestions(numeroQuery)
+  const matriculeSuggestions = useMatriculeSuggestions(form.matricule)
+  const [sessionQuery, setSessionQuery] = useState('')
+  // onlyActive=false — on doit pouvoir retrouver une facture liée à une
+  // session déjà terminée, c'est même le cas le plus fréquent en pratique.
+  const sessionSuggestions = useSessionSuggestions(sessionQuery, false)
 
   const handleGenerer = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,12 +66,8 @@ export default function FacturePage() {
     }
   }
 
-  const handlePrint = () => window.print()
-
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }))
-
-  const fmt = (n: number) => Number(n).toLocaleString('fr')
 
   return (
     <div className="app-layout">
@@ -94,38 +95,88 @@ export default function FacturePage() {
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Référence</label>
-                    <input className="form-control" value={form.reference}
-                      onChange={set('reference')} placeholder="Ex: FAC-2025-0001" />
+                    {/* FIX : autocomplétion — sélectionner une suggestion
+                        remplit reference avec le vrai ref_facture (id). */}
+                    <input
+                      className="form-control"
+                      list="facture-ref-suggestions"
+                      value={refQuery}
+                      onChange={e => {
+                        const v = e.target.value
+                        setRefQuery(v)
+                        setForm(p => ({ ...p, reference: v }))
+                      }}
+                      placeholder="Ex: 1773034831" />
+                    <datalist id="facture-ref-suggestions">
+                      {refSuggestions.map(s => (
+                        <option key={s.ref_facture} value={s.ref_facture}>
+                          {s.numero_facture} — {s.nom} {s.prenom} ({s.matricule})
+                        </option>
+                      ))}
+                    </datalist>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Numéro</label>
-                    <input className="form-control" value={form.numero}
-                      onChange={set('numero')} placeholder="Ex: 2025-0001" />
+                    <input
+                      className="form-control"
+                      list="facture-numero-suggestions"
+                      value={numeroQuery}
+                      onChange={e => {
+                        const v = e.target.value
+                        setNumeroQuery(v)
+                        setForm(p => ({ ...p, numero: v }))
+                      }}
+                      placeholder="Ex: 2025-0001" />
+                    <datalist id="facture-numero-suggestions">
+                      {numeroSuggestions.map(s => (
+                        <option key={s.ref_facture} value={s.numero_facture}>
+                          {s.nom} {s.prenom} ({s.matricule})
+                        </option>
+                      ))}
+                    </datalist>
                   </div>
                 </div>
 
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Matricule</label>
-                    <input className="form-control" value={form.matricule}
-                      onChange={set('matricule')} placeholder="Ex: NI-3824" />
+                    <input
+                      className="form-control"
+                      list="facture-matricule-suggestions"
+                      value={form.matricule}
+                      onChange={e => setForm(p => ({ ...p, matricule: e.target.value.toUpperCase() }))}
+                      placeholder="Ex: NI-3824" />
+                    <datalist id="facture-matricule-suggestions">
+                      {matriculeSuggestions.map(s => (
+                        <option key={s.matricule} value={s.matricule}>{s.nom} {s.prenom}</option>
+                      ))}
+                    </datalist>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Session</label>
+                    {/* FIX : autocomplétion au lieu du chargement complet de
+                        /sessions (jusqu'à 500 lignes d'un coup). */}
                     <div style={{ position: 'relative' }}>
                       <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', display: 'flex', pointerEvents: 'none' }}>
                         <IcoSession />
                       </span>
-                      <select className="form-control" style={{ paddingLeft: 32 }}
-                        value={form.code_session} onChange={set('code_session')}>
-                        <option value="">-- Choisir une session --</option>
-                        {loadingSessions
-                          ? <option disabled>Chargement…</option>
-                          : sessions.map(s => (
-                              <option key={s.code_session} value={s.code_session}>{s.code_session}</option>
-                            ))
-                        }
-                      </select>
+                      <input
+                        className="form-control"
+                        style={{ paddingLeft: 32 }}
+                        list="facture-session-suggestions"
+                        value={sessionQuery}
+                        onChange={e => {
+                          const v = e.target.value
+                          setSessionQuery(v)
+                          const match = sessionSuggestions.find(s => s.code_session === v)
+                          setForm(p => ({ ...p, code_session: match ? v : '' }))
+                        }}
+                        placeholder="Tapez pour rechercher une session…" />
+                      <datalist id="facture-session-suggestions">
+                        {sessionSuggestions.map(s => (
+                          <option key={s.code_session} value={s.code_session}>{s.module_nom}</option>
+                        ))}
+                      </datalist>
                     </div>
                   </div>
                 </div>
@@ -147,103 +198,8 @@ export default function FacturePage() {
             </div>
           </div>
 
-          {/* ── Aperçu : liste de factures ── */}
-          {factures.length > 0 && (
-            <div className="card">
-              <div className="card-header">
-                <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <IcoDoc /> {factures.length > 1 ? `${factures.length} factures` : 'Aperçu de la facture'}
-                </span>
-                <button className="btn btn-primary btn-sm"
-                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                  onClick={handlePrint}>
-                  <IcoPrint /> Imprimer
-                </button>
-              </div>
-
-              <div className="card-body" id="facture-print">
-                {factures.map((facture, idx) => (
-                  <div key={facture.reference}
-                    style={{ maxWidth: 700, margin: '0 auto', ...(idx > 0 ? { marginTop: 40, paddingTop: 40, borderTop: '2px dashed #e2e8f0' } : {}) }}>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, paddingBottom: 20, borderBottom: '2px solid #1e3a8a' }}>
-                      <div>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: '#1e3a8a' }}>{facture.centre.nom}</div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>{facture.centre.adresse}</div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>{facture.centre.tel} | {facture.centre.email}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: '#1e3a8a' }}>FACTURE</div>
-                        <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>Réf : <b>{facture.reference}</b></div>
-                        <div style={{ fontSize: 13, color: '#64748b' }}>N° : <b>{facture.numero}</b></div>
-                        <div style={{ fontSize: 13, color: '#64748b' }}>Date : <b>{facture.date_facture}</b></div>
-                      </div>
-                    </div>
-
-                    <div style={{ background: '#f8fafc', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a8a', marginBottom: 10, textTransform: 'uppercase' }}>Étudiant</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
-                        <div><span style={{ color: '#64748b' }}>Matricule : </span><b>{facture.etudiant.matricule}</b></div>
-                        <div><span style={{ color: '#64748b' }}>Nom : </span><b>{facture.etudiant.nom} {facture.etudiant.prenom}</b></div>
-                        <div><span style={{ color: '#64748b' }}>Téléphone : </span>{facture.etudiant.telephone}</div>
-                        <div><span style={{ color: '#64748b' }}>Email : </span>{facture.etudiant.email}</div>
-                      </div>
-                    </div>
-
-                    <div style={{ background: '#eff6ff', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a8a', marginBottom: 10, textTransform: 'uppercase' }}>Formation</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
-                        <div><span style={{ color: '#64748b' }}>Module : </span><b>{facture.session.module_nom}</b></div>
-                        <div><span style={{ color: '#64748b' }}>Session : </span>{facture.session.code_session}</div>
-                        <div><span style={{ color: '#64748b' }}>Début : </span>{facture.session.date_debut}</div>
-                        <div><span style={{ color: '#64748b' }}>Fin : </span>{facture.session.date_fin}</div>
-                        <div><span style={{ color: '#64748b' }}>Lieu : </span>{facture.session.lieu}</div>
-                        <div><span style={{ color: '#64748b' }}>Horaire : </span>{facture.session.horaire_desc}</div>
-                      </div>
-                    </div>
-
-                    <div style={{ border: '2px solid #1e3a8a', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a8a', marginBottom: 14, textTransform: 'uppercase' }}>Détail du paiement</div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                        <thead>
-                          <tr style={{ background: '#1e3a8a', color: 'white' }}>
-                            <th style={{ padding: '8px 14px', textAlign: 'left' }}>Description</th>
-                            <th style={{ padding: '8px 14px', textAlign: 'right' }}>Montant</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                            <td style={{ padding: '10px 14px' }}>Frais de formation — {facture.session.module_nom}</td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>{fmt(facture.session.frais_formation)} Ar</td>
-                          </tr>
-                          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                            <td style={{ padding: '10px 14px', color: '#64748b' }}>Déjà versé (avant cette facture)</td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right' }}>{fmt(facture.inscription.somme_deja_paye)} Ar</td>
-                          </tr>
-                          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                            <td style={{ padding: '10px 14px', color: '#16a34a', fontWeight: 600 }}>Montant payé (cette facture)</td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>{fmt(facture.inscription.montant_paye)} Ar</td>
-                          </tr>
-                          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                            <td style={{ padding: '10px 14px', fontWeight: 600 }}>Total versé</td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700 }}>{fmt(facture.inscription.total_paye)} Ar</td>
-                          </tr>
-                          <tr style={{ background: '#fef2f2' }}>
-                            <td style={{ padding: '10px 14px', color: '#dc2626', fontWeight: 600 }}>Reste à payer</td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{fmt(facture.inscription.reste)} Ar</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 12, marginTop: 20, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
-                      Merci pour votre confiance — {facture.centre.nom} © {new Date().getFullYear()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* ── Aperçu : liste de factures — modèle partagé avec InscriptionTab.tsx ── */}
+          <FactureInvoice factures={factures} />
         </div>
       </div>
     </div>

@@ -3,7 +3,10 @@ import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage          from './pages/LoginPage'
 import CreateUserPage     from './pages/CreateUserPage'
-import ForgotPasswordPage from './pages/ForgotPasswordPage'
+// FIX : ForgotPasswordPage désactivée jusqu'à nouvel ordre (cohérent avec le
+// lien caché dans LoginPage.tsx) — décommenter l'import et la route plus bas
+// pour réactiver.
+// import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage  from './pages/ResetPasswordPage'
 import DashboardMenu      from './pages/DashboardMenu'
 import FormationPage      from './pages/formation/FormationPage'
@@ -21,12 +24,27 @@ import FacturePage from './pages/formation/FacturePage'
 
 // FIX : "token" n'existe plus dans AuthContext depuis le passage à l'auth par
 // cookie de session — c'est la présence de "user" qui indique une session active.
+//
+// FIX PERFORMANCE : on ne bloque plus le rendu des enfants tant que /user n'a
+// pas répondu ("loading"). Avant, tant que loading était vrai, la page protégée
+// n'était jamais montée dans le DOM — donc ses propres appels API (useTable,
+// etc.) ne démarraient qu'APRÈS la résolution de /user, en série. Résultat :
+// /user (400-800ms) PUIS achats/charges/etc. (400ms chacune) = 1.5-2s cumulés.
+//
+// Maintenant on monte les enfants immédiatement : leurs appels API partent en
+// parallèle de la vérification /user. Si la session s'avère invalide, on
+// redirige dès que "loading" devient false — et de toute façon les requêtes
+// de données échoueraient elles-mêmes en 401 (géré par l'intercepteur Axios
+// dans api/axios.ts, qui redirige déjà vers /login sur 401/419).
 function PrivateRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
-  if (loading) return <div className="loading-center"><div className="spinner"/></div>
-  return user ? <>{children}</> : <Navigate to="/login" replace />
+  if (!loading && !user) return <Navigate to="/login" replace />
+  return <>{children}</>
 }
 
+// PublicRoute inchangée : ce n'est pas elle qui pèse sur la vitesse de
+// chargement des données, et elle reste un point sensible (double vérif
+// connecté / pas connecté) qu'on ne touche pas ici.
 function PublicRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="loading-center"><div className="spinner"/></div>
@@ -36,11 +54,14 @@ function PublicRoute({ children }: { children: ReactNode }) {
 // FIX : nouvelle garde — protège /admin/create-user en plus de l'authentification,
 // vérifie aussi que l'utilisateur est bien admin (double protection, cohérent avec
 // la vérification déjà faite côté backend dans AuthController::createUser()).
+//
+// Même optimisation que PrivateRoute : on ne bloque plus le rendu tant que
+// loading est vrai.
 function AdminRoute({ children }: { children: ReactNode }) {
   const { user, isAdmin, loading } = useAuth()
-  if (loading) return <div className="loading-center"><div className="spinner"/></div>
-  if (!user) return <Navigate to="/login" replace />
-  return isAdmin() ? <>{children}</> : <Navigate to="/dashboard" replace />
+  if (!loading && !user) return <Navigate to="/login" replace />
+  if (!loading && user && !isAdmin()) return <Navigate to="/dashboard" replace />
+  return <>{children}</>
 }
 
 function AppRoutes() {
@@ -49,7 +70,10 @@ function AppRoutes() {
       {/* ── Pages publiques ── */}
       <Route path="/"                element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route path="/login"           element={<PublicRoute><LoginPage /></PublicRoute>} />
-      <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+      {/* FIX : route désactivée jusqu'à nouvel ordre — un accès direct à
+          l'URL /forgot-password redirige maintenant vers "*" -> "/" comme
+          n'importe quelle route inconnue. Décommenter pour réactiver. */}
+      {/* <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} /> */}
       <Route path="/reset-password"  element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
 
       {/* FIX : /register public supprimé — remplacé par une route admin-only */}
@@ -65,7 +89,7 @@ function AppRoutes() {
       {/* ── Facture */}
       <Route path="/facture"       element={<PrivateRoute><FacturePage /></PrivateRoute>} />
       <Route path="/etat"          element={<PrivateRoute><EtatPage /></PrivateRoute>} />
-      <Route path="/echéance"      element={<PrivateRoute><EcheancePage /></PrivateRoute>} />
+      <Route path="/echeance"      element={<PrivateRoute><EcheancePage /></PrivateRoute>} />
       <Route path="/certification" element={<PrivateRoute><CertificationPage /></PrivateRoute>} />
       <Route path="/profile"       element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
 

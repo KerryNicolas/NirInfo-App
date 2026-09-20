@@ -2,18 +2,20 @@ import { useEffect, useState } from 'react'
 import api from '../../../api/axios'
 import toast from 'react-hot-toast'
 import { useMatriculeSuggestions } from '../../../hooks/useMatriculeSuggestions'
+import { useSessionSuggestions } from '../../../hooks/useSessionSuggestions'
 import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
 import FactureInvoice, { FactureData } from '../../../components/FactureInvoice'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../../components/icons'
+import { formatMontantInput, parseMontantInput, isValidMatriculeNI, invalidFieldStyle } from '../../../utils/validators'
 
 interface Inscription {
   id_paiement: number; matricule: string; nom: string; prenom: string
   code_session: string; date_paiement: string; montant_paye: number
-  reste: number; compte: string; lieu_paiement: string; editeur: string
+  reste: number; compte: string; id_compte: number; lieu_paiement: string; editeur: string
   ref_facture: string
 }
-interface Session { code_session: string }
 interface Compte { id_compte: number; libelle: string }
 
 const EMPTY_I = {
@@ -57,26 +59,46 @@ function DetailModal({ i, onClose }: { i: Inscription; onClose: () => void }) {
   )
 }
 
-export default function InscriptionTab() {
+export default function InscriptionTab({ prefillMatricule, onPrefillConsumed }: {
+  prefillMatricule?: string | null
+  onPrefillConsumed?: () => void
+} = {}) {
   const table    = useTable<Inscription>('/inscriptions', { perPage: 15 })
-  const [sessions, setSessions] = useState<Session[]>([])
   const [comptes,  setComptes]  = useState<Compte[]>([])
   const [form,     setForm]     = useState(EMPTY_I)
   const matriculeSuggestions = useMatriculeSuggestions(form.matricule)
+  // FIX : remplace le chargement complet de /sessions (2671+ lignes, sans
+  // limite ni filtre) par une autocomplétion débattue, sur le même principe
+  // que le champ Matricule — ne charge que quelques résultats pertinents,
+  // et uniquement les sessions pas encore terminées (only_active).
+  const [sessionQuery, setSessionQuery] = useState('')
+  const sessionSuggestions = useSessionSuggestions(sessionQuery)
   const [editing,  setEditing]  = useState<Inscription | null>(null)
   const [viewing,  setViewing]  = useState<Inscription | null>(null)
   const [saving,   setSaving]   = useState(false)
   const [derniereFacture, setDerniereFacture] = useState<FactureData | null>(null)
   const [loadingFacture, setLoadingFacture]   = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+
+  // FIX : quand EtudiantTab transmet un matricule (bouton "+"), on le
+  // pré-remplit ici — l'utilisateur n'a plus qu'à choisir la session et
+  // compléter le reste. onPrefillConsumed() prévient le parent que c'est
+  // fait, pour ne pas re-déclencher ce pré-remplissage à chaque re-render.
+  useEffect(() => {
+    if (prefillMatricule) {
+      setForm(p => ({ ...p, matricule: prefillMatricule }))
+      onPrefillConsumed?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillMatricule])
 
   useEffect(() => {
-  api.get('/sessions').then(r => setSessions(r.data.data ?? [])).catch(() => {})
-  api.get('/inscriptions/comptes')
-    .then(r => setComptes(Array.isArray(r.data) ? r.data : []))
-    .catch(() => setComptes([]))
-}, [])
+    api.get('/inscriptions/comptes')
+      .then(r => setComptes(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setComptes([]))
+  }, [])
 
-  const reset = () => { setForm(EMPTY_I); setEditing(null); setDerniereFacture(null) }
+  const reset = () => { setForm(EMPTY_I); setSessionQuery(''); setEditing(null); setDerniereFacture(null) }
 
   const handleEdit = (i: Inscription) => {
     setEditing(i)
@@ -85,10 +107,14 @@ export default function InscriptionTab() {
       matricule: i.matricule,
       date_paiement: i.date_paiement?.split('T')[0] || new Date().toISOString().split('T')[0],
       code_session: i.code_session,
-      montant_paye: String(i.montant_paye),
-      id_compte: '',
+      montant_paye: formatMontantInput(String(i.montant_paye)),
+      // FIX : pré-rempli avec le vrai id_compte désormais renvoyé par
+      // l'API (avant : toujours vide, impossible de savoir quel compte
+      // était sélectionné).
+      id_compte: String(i.id_compte ?? ''),
       lieu_paiement: i.lieu_paiement || 'Ampandrana',
     })
+    setSessionQuery(i.code_session)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -99,11 +125,23 @@ export default function InscriptionTab() {
     setDerniereFacture(null)
     try {
       if (editing) {
-        await api.put(`/inscriptions/${editing.id_paiement}`, { montant_paye: form.montant_paye, lieu_paiement: form.lieu_paiement })
+        // FIX : envoie maintenant tous les champs modifiables — avant,
+        // matricule/code_session/id_compte étaient ignorés même si changés
+        // dans le formulaire. Le backend recalcule automatiquement
+        // reste_a_payer et ajuste les soldes de compte en conséquence.
+        await api.put(`/inscriptions/${editing.id_paiement}`, {
+          matricule: form.matricule,
+          code_session: form.code_session,
+          // FIX : le champ Montant payé est saisi formaté ("1 000 000")
+          // pour l'affichage — on renvoie la valeur numérique brute à l'API.
+          montant_paye: parseMontantInput(form.montant_paye),
+          id_compte: form.id_compte,
+          lieu_paiement: form.lieu_paiement,
+        })
         toast.success('Inscription mise à jour')
         reset()
       } else {
-        const r = await api.post('/inscriptions', form)
+        const r = await api.post('/inscriptions', { ...form, montant_paye: parseMontantInput(form.montant_paye) })
         toast.success('Inscription enregistrée')
 
         setLoadingFacture(true)
@@ -117,16 +155,18 @@ export default function InscriptionTab() {
         }
 
         setForm(p => ({ ...p, matricule:'', code_session:'', montant_paye:'', id_compte:'' }))
+        setSessionQuery('')
       }
       table.reload()
     } catch (err: any) { toast.error(err.response?.data?.message || "Erreur lors de l'enregistrement") }
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer cette inscription ?')) return
-    try { await api.delete(`/inscriptions/${id}`); toast.success('Inscription supprimée'); table.reload() }
+  const handleDelete = async () => {
+    if (!confirmDeleteId) return
+    try { await api.delete(`/inscriptions/${confirmDeleteId}`); toast.success('Inscription supprimée'); table.reload() }
     catch { toast.error('Erreur lors de la suppression') }
+    finally { setConfirmDeleteId(null) }
   }
 
   const fmt = (n: number) => Number(n).toLocaleString('fr')
@@ -148,7 +188,11 @@ export default function InscriptionTab() {
                   list="matricule-suggestions"
                   value={form.matricule}
                   onChange={e => setForm(p => ({ ...p, matricule: e.target.value.toUpperCase() }))}
-                  required placeholder="Ex: NI-3824" disabled={!!editing} />
+                  style={form.matricule && !isValidMatriculeNI(form.matricule) ? invalidFieldStyle : undefined}
+                  required placeholder="Ex: NI-3824" />
+                {/* FIX : déverrouillé — modifiable même en édition,
+                    reste_a_payer recalculé automatiquement côté backend
+                    pour l'ancien ET le nouveau groupe étudiant/session. */}
                 <datalist id="matricule-suggestions">
                   {matriculeSuggestions.map(s => (
                     <option key={s.matricule} value={s.matricule}>{s.nom} {s.prenom}</option>
@@ -163,23 +207,47 @@ export default function InscriptionTab() {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Session </label>
-                <select className="form-control" value={form.code_session} onChange={set('code_session')} required disabled={!!editing}>
-                  <option value="">-- Choisir une session --</option>
-                  {sessions.map(s => <option key={s.code_session} value={s.code_session}>{s.code_session}</option>)}
-                </select>
+                {/* FIX : remplace le <select> chargé avec toutes les sessions
+                    par un champ texte + datalist, alimenté par recherche
+                    débattue côté serveur (2 caractères min, 300ms, 10
+                    résultats max, sessions non terminées seulement). */}
+                <input
+                  className="form-control"
+                  list="session-suggestions"
+                  value={sessionQuery}
+                  onChange={e => {
+                    const v = e.target.value
+                    setSessionQuery(v)
+                    // Ne valide code_session que si la valeur tapée correspond
+                    // exactement à une suggestion proposée — évite d'enregistrer
+                    // un texte libre qui ne correspond à aucune vraie session.
+                    const match = sessionSuggestions.find(s => s.code_session === v)
+                    setForm(p => ({ ...p, code_session: match ? v : '' }))
+                  }}
+                  required placeholder="Tapez pour rechercher une session…" />
+                {/* FIX : déverrouillé — voir commentaire ci-dessus sur le
+                    recalcul automatique */}
+                <datalist id="session-suggestions">
+                  {sessionSuggestions.map(s => (
+                    <option key={s.code_session} value={s.code_session}>{s.module_nom}</option>
+                  ))}
+                </datalist>
               </div>
               <div className="form-group">
                 <label className="form-label">Montant payé </label>
-                <input className="form-control" type="number" value={form.montant_paye} onChange={set('montant_paye')} required />
+                <input className="form-control" type="text" inputMode="numeric" value={form.montant_paye} onChange={e => setForm(p => ({ ...p, montant_paye: formatMontantInput(e.target.value) }))} required placeholder="Ex: 100 000" />
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Compte encaissement</label>
-                <select className="form-control" value={form.id_compte} onChange={set('id_compte')} required={!editing} disabled={!!editing}>
+                <select className="form-control" value={form.id_compte} onChange={set('id_compte')} required>
                   <option value="">-- Choisir un compte --</option>
                   {(comptes ?? []).map(c => <option key={c.id_compte} value={c.id_compte}>{c.libelle}</option>)}
                 </select>
+                {/* FIX : déverrouillé — changer de compte reverse
+                    automatiquement le solde de l'ancien et applique le
+                    nouveau montant sur le nouveau compte côté backend. */}
               </div>
               <div className="form-group">
                 <label className="form-label">Lieu de paiement</label>
@@ -241,7 +309,7 @@ export default function InscriptionTab() {
                     <td style={{ fontSize:11, color:'#2563eb', fontWeight:600 }}>{i.ref_facture || '—'}</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(i)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => handleDelete(i.id_paiement)}><IcoTrash /></button>
+                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(i.id_paiement)}><IcoTrash /></button>
                     </div></td>
                   </tr>
                 ))}
@@ -253,6 +321,15 @@ export default function InscriptionTab() {
       </div>
 
       {viewing && <DetailModal i={viewing} onClose={() => setViewing(null)} />}
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="Supprimer cette inscription ?"
+        message="Cette inscription sera définitivement supprimée. Cette action est irréversible."
+        confirmLabel="Supprimer"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </>
   )
 }

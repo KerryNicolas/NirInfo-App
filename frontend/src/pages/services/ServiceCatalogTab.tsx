@@ -3,6 +3,7 @@ import api from '../../api/axios'
 import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../components/icons'
 
 interface ServiceItem { id_services: number; service_name: string }
@@ -13,6 +14,7 @@ export default function ServiceCatalogTab() {
   const [editing, setEditing] = useState<ServiceItem | null>(null)
   const [form,    setForm]    = useState(EMPTY)
   const [saving,  setSaving]  = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
   const reset = () => { setForm(EMPTY); setEditing(null) }
 
@@ -32,10 +34,11 @@ export default function ServiceCatalogTab() {
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer ce service ?')) return
-    try { await api.delete(`/services/${id}`); toast.success('Service supprimé'); table.reload() }
+  const handleDelete = async () => {
+    if (!confirmDeleteId) return
+    try { await api.delete(`/services/${confirmDeleteId}`); toast.success('Service supprimé'); table.reload() }
     catch (err: any) { toast.error(err.response?.data?.message || 'Erreur suppression') }
+    finally { setConfirmDeleteId(null) }
   }
 
   return (
@@ -43,7 +46,8 @@ export default function ServiceCatalogTab() {
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-header">
           <span className="card-title" style={{ display:'flex', alignItems:'center', gap:7 }}>{editing ? <IcoEdit /> : <IcoPlus />} {editing ? 'Modifier le service' : 'Nouveau service'}</span>
-          {editing && <button className="btn btn-secondary btn-sm" onClick={reset} style={{ display:'flex', alignItems:'center', gap:5 }}><IcoX /> Annuler</button>}
+          {/* FIX : style harmonisé avec le bouton Annuler d'Étudiant */}
+          {editing && <button className="btn btn-sm" onClick={reset} style={{ display:'flex', alignItems:'center', gap:5, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca' }}><IcoX /> Annuler</button>}
         </div>
         <div className="card-body">
           <form onSubmit={handleSubmit}>
@@ -83,7 +87,7 @@ export default function ServiceCatalogTab() {
                     <td style={{ fontWeight:600 }}>{s.service_name}</td>
                     <td><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(s)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => handleDelete(s.id_services)}><IcoTrash /></button>
+                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(s.id_services)}><IcoTrash /></button>
                     </div></td>
                   </tr>
                 ))}
@@ -93,6 +97,15 @@ export default function ServiceCatalogTab() {
         </div>
         {!table.loading && table.meta.total > 0 && <Pagination meta={table.meta} onPage={table.setPage} onPerPage={table.setPerPage} />}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="Supprimer ce service ?"
+        message="Ce service sera définitivement supprimé. Cette action est irréversible."
+        confirmLabel="Supprimer"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </>
   )
 }

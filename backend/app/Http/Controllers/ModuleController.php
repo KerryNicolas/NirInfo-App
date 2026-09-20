@@ -55,12 +55,46 @@ class ModuleController extends BaseApiController
 
     public function update(Request $request, $id)
     {
-        $request->validate(['nom' => 'required|string|max:255']);
-        DB::table('module')->where('code_module', $id)->update([
+        // FIX : code_module devient modifiable. "sometimes" — n'est validé que
+        // si le champ est présent dans la requête ; unique() exclut la ligne
+        // en cours (celle qu'on est en train de modifier) pour ne pas se
+        // rejeter elle-même comme doublon.
+        $request->validate([
+            'nom'         => 'required|string|max:255',
+            'code_module' => 'sometimes|required|string|max:50|unique:module,code_module,' . $id . ',code_module',
+        ]);
+
+        $data = [
             'nom_module'         => $request->nom,
             'description_module' => $request->description ?? '',
-        ]);
-        return $this->ok('Module mis à jour avec succès');
+        ];
+
+        $newCode = $id; // valeur retournée au frontend si pas de changement
+
+        if ($request->filled('code_module')) {
+            $normalized = strtoupper(trim($request->code_module));
+            if ($normalized !== $id) {
+                $data['code_module'] = $normalized;
+                $newCode = $normalized;
+
+                // FIX CRITIQUE : la table `session` référence code_module
+                // (2671 lignes confirmées en base) — sans cette mise à jour,
+                // renommer un module rendrait orphelines toutes ses sessions
+                // existantes. Les deux mises à jour sont faites dans une
+                // transaction : soit les deux réussissent, soit aucune.
+                DB::transaction(function () use ($id, $normalized, $data) {
+                    DB::table('session')->where('code_module', $id)
+                        ->update(['code_module' => $normalized]);
+                    DB::table('module')->where('code_module', $id)->update($data);
+                });
+
+                return $this->ok('Module mis à jour avec succès', ['code_module' => $newCode]);
+            }
+        }
+
+        DB::table('module')->where('code_module', $id)->update($data);
+
+        return $this->ok('Module mis à jour avec succès', ['code_module' => $newCode]);
     }
 
     public function destroy($id)

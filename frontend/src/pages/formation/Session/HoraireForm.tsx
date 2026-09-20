@@ -3,6 +3,7 @@ import api from '../../../api/axios'
 import toast from 'react-hot-toast'
 import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
+import ConfirmDialog from '../../../components/ConfirmDialog'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX, IcoInfo } from '../../../components/icons'
 
 interface Horaire { code_horaire: string; designation: string; horaire: string; remarque: string; editeur: string }
@@ -29,6 +30,7 @@ export default function HoraireForm() {
   const [form,    setForm]    = useState(EMPTY)
   const [saving,  setSaving]  = useState(false)
   const [showEditeur, setShowEditeur] = useState<string | null>(null)
+  const [confirmDeleteCode, setConfirmDeleteCode] = useState<string | null>(null)
 
   const reset = () => { setForm(EMPTY); setEditing(null) }
 
@@ -48,10 +50,11 @@ export default function HoraireForm() {
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (code: string) => {
-    if (!confirm(`Supprimer l'horaire "${code}" ?`)) return
-    try { await api.delete(`/horaires/${code}`); toast.success('Horaire supprimé'); table.reload() }
+  const handleDelete = async () => {
+    if (!confirmDeleteCode) return
+    try { await api.delete(`/horaires/${confirmDeleteCode}`); toast.success('Horaire supprimé'); table.reload() }
     catch { toast.error('Erreur suppression') }
+    finally { setConfirmDeleteCode(null) }
   }
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -62,14 +65,18 @@ export default function HoraireForm() {
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-header">
           <span className="card-title">{editing ? "Modifier l'horaire" : 'Nouvel horaire'}</span>
-          {editing && <button className="btn btn-secondary btn-sm" onClick={reset} style={{ display:'flex', alignItems:'center', gap:5 }}><IcoX /> Annuler</button>}
+          {/* FIX : style harmonisé avec le bouton Annuler d'Étudiant */}
+          {editing && <button className="btn btn-sm" onClick={reset} style={{ display:'flex', alignItems:'center', gap:5, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca' }}><IcoX /> Annuler</button>}
         </div>
         <div className="card-body">
           <form onSubmit={handleSubmit}>
             <div className="form-row-3">
               <div className="form-group">
                 <label className="form-label">Code </label>
-                <input className="form-control" value={form.code_horaire} onChange={set('code_horaire')} required disabled={!!editing} placeholder="Ex: MAT" style={{ textTransform:'uppercase' }} />
+                {/* FIX : code_horaire est maintenant modifiable même en
+                    édition — mise à jour en cascade gérée côté backend
+                    (session.code_horaire) dans HoraireController::update(). */}
+                <input className="form-control" value={form.code_horaire} onChange={set('code_horaire')} required placeholder="Ex: MAT" style={{ textTransform:'uppercase' }} />
               </div>
               <div className="form-group">
                 <label className="form-label">Désignation </label>
@@ -121,7 +128,7 @@ export default function HoraireForm() {
                     <td><div className="table-actions">
                       <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(h.editeur)}><IcoInfo /></button>
                       <button className="btn-icon edit" onClick={() => handleEdit(h)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => handleDelete(h.code_horaire)}><IcoTrash /></button>
+                      <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(h.code_horaire)}><IcoTrash /></button>
                     </div></td>
                   </tr>
                 ))}
@@ -133,6 +140,15 @@ export default function HoraireForm() {
       </div>
 
       {showEditeur !== null && <EditeurPopover editeur={showEditeur} onClose={() => setShowEditeur(null)} />}
+
+      <ConfirmDialog
+        open={!!confirmDeleteCode}
+        title="Supprimer cet horaire ?"
+        message={confirmDeleteCode ? `L'horaire « ${confirmDeleteCode} » sera définitivement supprimé. Cette action est irréversible.` : ''}
+        confirmLabel="Supprimer"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteCode(null)}
+      />
     </>
   )
 }
