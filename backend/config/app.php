@@ -6,6 +6,9 @@ return [
     'debug'           => (bool) env('APP_DEBUG', false),
     'url'             => env('APP_URL', 'http://localhost'),
     'asset_url'       => env('ASSET_URL'),
+    // Adresse du frontend React, utilisée dans les liens des emails
+    // (activation de compte, réinitialisation du mot de passe).
+    'frontend_url'    => env('FRONTEND_URL', 'http://localhost:5173'),
     'timezone'        => 'Indian/Antananarivo',
     'locale'          => 'fr',
     'fallback_locale' => 'en',

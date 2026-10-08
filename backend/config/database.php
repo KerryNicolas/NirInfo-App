@@ -14,7 +14,9 @@ return [
             'collation' => 'utf8mb4_unicode_ci',
             'prefix'    => '',
             'strict'    => false,
-            'engine'    => null,
+            // InnoDB imposé : avec null, les nouvelles tables prenaient le
+            // moteur par défaut du serveur (MyISAM sur WAMP, sans transactions).
+            'engine'    => 'InnoDB',
         ],
     ],
     'migrations' => 'migrations',
