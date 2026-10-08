@@ -93,12 +93,17 @@ function StrengthBar({ password }: { password: string }) {
 }
 
 export default function ResetPasswordPage() {
-  const { resetPassword } = useAuth()
+  const { resetPassword, activateAccount } = useAuth()
   const navigate           = useNavigate()
   const [searchParams]     = useSearchParams()
 
   const token = searchParams.get('token') || ''
   const email = searchParams.get('email') || ''
+  // FIX : le lien d'activation envoyé par AuthController::createUser() porte
+  // "activation=1". Avant, ce paramètre était ignoré et la page appelait
+  // toujours /reset-password, que le backend refuse pour un compte en
+  // attente : aucun nouveau compte ne pouvait être activé.
+  const isActivation = searchParams.get('activation') === '1'
 
   const [password, setPassword]         = useState('')
   const [confirmation, setConfirmation] = useState('')
@@ -116,8 +121,14 @@ export default function ResetPasswordPage() {
     }
     setLoading(true)
     try {
-      await resetPassword({ token, email, password, password_confirmation: confirmation })
-      toast.success('Mot de passe réinitialisé avec succès !')
+      const data = { token, email, password, password_confirmation: confirmation }
+      if (isActivation) {
+        await activateAccount(data)
+        toast.success('Compte activé ! Vous pouvez maintenant vous connecter.')
+      } else {
+        await resetPassword(data)
+        toast.success('Mot de passe réinitialisé avec succès !')
+      }
       navigate('/login')
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Lien invalide ou expiré')
@@ -134,11 +145,17 @@ export default function ResetPasswordPage() {
       }}>
         <div style={{ textAlign: 'center', padding: 40 }}>
           <p style={{ color: '#ef4444', fontSize: 16, marginBottom: 16 }}>
-            Lien de réinitialisation invalide.
+            {isActivation ? "Lien d'activation invalide." : 'Lien de réinitialisation invalide.'}
           </p>
-          <Link to="/forgot-password" style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>
-            Demander un nouveau lien
-          </Link>
+          {isActivation ? (
+            <p style={{ color: '#64748b', fontSize: 13.5 }}>
+              Demandez à un administrateur de vous en renvoyer un.
+            </p>
+          ) : (
+            <Link to="/forgot-password" style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>
+              Demander un nouveau lien
+            </Link>
+          )}
         </div>
       </div>
     )
@@ -167,10 +184,10 @@ export default function ResetPasswordPage() {
         </div>
 
         <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', marginBottom: 8, letterSpacing: '-0.01em' }}>
-          Nouveau mot de passe
+          {isActivation ? 'Activer mon compte' : 'Nouveau mot de passe'}
         </h2>
         <p style={{ color: '#64748b', fontSize: 13.5, lineHeight: 1.6, marginBottom: 6 }}>
-          Réinitialisation pour le compte :
+          {isActivation ? 'Choisissez votre mot de passe pour le compte :' : 'Réinitialisation pour le compte :'}
         </p>
         <p style={{
           color: '#2563eb', fontWeight: 600, fontSize: 13,
@@ -182,7 +199,7 @@ export default function ResetPasswordPage() {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">Nouveau mot de passe</label>
+            <label className="form-label">{isActivation ? 'Mot de passe' : 'Nouveau mot de passe'}</label>
             <PasswordInput value={password} onChange={setPassword} placeholder="Minimum 8 caractères" />
             <StrengthBar password={password} />
           </div>
@@ -209,17 +226,23 @@ export default function ResetPasswordPage() {
             disabled={loading || password !== confirmation || password.length < 8}
           >
             {loading
-              ? <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Mise à jour…</>
-              : 'Réinitialiser le mot de passe'
+              ? <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> {isActivation ? 'Activation…' : 'Mise à jour…'}</>
+              : (isActivation ? 'Activer mon compte' : 'Réinitialiser le mot de passe')
             }
           </button>
         </form>
 
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12.5, color: '#94a3b8' }}>
-          Lien invalide ?{' '}
-          <Link to="/forgot-password" style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>
-            En demander un nouveau
-          </Link>
+          {isActivation ? (
+            <>Lien invalide ou expiré ? Demandez à un administrateur de vous en renvoyer un.</>
+          ) : (
+            <>
+              Lien invalide ?{' '}
+              <Link to="/forgot-password" style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>
+                En demander un nouveau
+              </Link>
+            </>
+          )}
         </p>
       </div>
     </div>

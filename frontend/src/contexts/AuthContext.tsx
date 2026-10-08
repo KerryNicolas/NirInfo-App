@@ -18,6 +18,7 @@ interface AuthCtx {
   logout: () => void
   forgotPassword: (email: string) => Promise<void>
   resetPassword: (data: ResetPasswordData) => Promise<void>
+  activateAccount: (data: ResetPasswordData) => Promise<void>
   updateProfile: (data: UpdateProfileData) => Promise<void>
   hasPermission: (slug: string) => boolean
   isAdmin: () => boolean
@@ -98,6 +99,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await api.post('/reset-password', data)
   }
 
+  // Activation d'un compte créé par l'admin (lien reçu par email) : même
+  // forme de données que resetPassword, mais route dédiée — le backend refuse
+  // /reset-password tant que le compte n'est pas activé.
+  const activateAccount = async (data: ResetPasswordData) => {
+    await api.post('/activate-account', data)
+  }
+
   const updateProfile = async (data: UpdateProfileData) => {
     const res = await api.put('/profile', data)
     setUser(res.data.user)
@@ -114,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, login, logout,
-      forgotPassword, resetPassword, updateProfile,
+      forgotPassword, resetPassword, activateAccount, updateProfile,
       hasPermission, isAdmin,
       loading,
     }}>

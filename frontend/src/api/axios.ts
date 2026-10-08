@@ -31,12 +31,20 @@ api.interceptors.request.use((config) => {
 // Intercepteur réponse — gère à la fois 401 (session absente/expirée) et 419
 // (jeton CSRF expiré, typique après une longue inactivité) : dans les deux cas,
 // l'utilisateur n'est plus authentifié valablement, on le renvoie proprement au login.
+//
+// FIX : pas de redirection sur les pages publiques. Au chargement, AuthContext
+// appelle /user pour savoir si quelqu'un est connecté : pour un visiteur non
+// connecté, le 401 est la réponse normale, pas une session expirée. Avant, ce
+// 401 expulsait vers /login toute personne ouvrant /reset-password — le lien
+// d'activation de compte et celui de réinitialisation étaient inutilisables.
+const PUBLIC_PATHS = ['/', '/login', '/reset-password', '/forgot-password']
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     const status = err.response?.status
     if (status === 401 || status === 419) {
-      if (window.location.pathname !== '/login') {
+      if (!PUBLIC_PATHS.includes(window.location.pathname)) {
         window.location.href = '/login'
       }
     }
