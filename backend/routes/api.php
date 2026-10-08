@@ -24,8 +24,10 @@ use App\Http\Controllers\TransferController;
 
 // ── Routes publiques — throttle par route (le groupe global 'api' n'a plus de throttle) ──
 Route::middleware('throttle:6,1')->group(function () {
-    Route::post('/login',          [AuthController::class, 'login']);
-    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+    Route::post('/login',            [AuthController::class, 'login']);
+    Route::post('/reset-password',   [AuthController::class, 'resetPassword']);
+    // NOUVEAU : activation d'un compte créé par l'admin (lien reçu par email)
+    Route::post('/activate-account', [AuthController::class, 'activateAccount']);
 });
 
 Route::middleware('throttle:3,60')->group(function () {
@@ -82,12 +84,16 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('permission:certifications.prix.manage');
     Route::post('/certifications/prix', [CertificationController::class, 'setPrix'])
         ->middleware('permission:certifications.prix.manage');
+    // Saisie manuelle d'un certificat — réservée à l'admin (même permission
+    // que la validation). À déclarer AVANT apiResource.
+    Route::post('/certifications/manuel', [CertificationController::class, 'storeManuel'])
+        ->middleware('permission:certifications.valider');
     Route::apiResource('certifications',  CertificationController::class);
     Route::post('/certifications/{id}/valider', [CertificationController::class, 'valider'])
         ->middleware('permission:certifications.valider');
-    Route::get('/certifications/prix', [CertificationController::class, 'getPrix']);
-    Route::get('/certifications/prix/historique', [CertificationController::class, 'getPrixHistorique']);
-    Route::post('/certifications/prix', [CertificationController::class, 'setPrix']);
+    // Route::get('/certifications/prix', [CertificationController::class, 'getPrix']);
+    // Route::get('/certifications/prix/historique', [CertificationController::class, 'getPrixHistorique']);
+    // Route::post('/certifications/prix', [CertificationController::class, 'setPrix']);
 
 
     // État & Échéance

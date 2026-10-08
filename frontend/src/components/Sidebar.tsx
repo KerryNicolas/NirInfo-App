@@ -94,6 +94,9 @@ const sectionTitle: Record<Props['section'], string> = {
 }
 
 const STORAGE_KEY = 'nirinfo_sidebar_open'
+// FIX (mobile) : même seuil que le breakpoint CSS .sidebar dans index.css
+// (@media max-width: 768px) — doit rester synchronisé avec ce fichier.
+const MOBILE_BREAKPOINT = 768
 
 export default function Sidebar({ section, activeTab, onTabChange }: Props) {
   const { logout } = useAuth()
@@ -102,7 +105,13 @@ export default function Sidebar({ section, activeTab, onTabChange }: Props) {
 
   const [open, setOpen] = useState<boolean>(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
-    return saved === null ? true : saved === 'true'
+    if (saved !== null) return saved === 'true'
+    // FIX (mobile) : aucune préférence enregistrée pour l'instant — replié
+    // par défaut sur petit écran (le panneau plein écran par-dessus le
+    // contenu serait gênant à la première visite), ouvert par défaut sur
+    // desktop comme avant. Ne change rien pour un utilisateur qui a déjà
+    // une préférence sauvegardée, sur aucune taille d'écran.
+    return typeof window === 'undefined' || window.innerWidth > MOBILE_BREAKPOINT
   })
 
   useEffect(() => {
@@ -117,18 +126,44 @@ export default function Sidebar({ section, activeTab, onTabChange }: Props) {
 
   const toggle = () => setOpen(p => !p)
 
+  // FIX (mobile) : sur petit écran, le menu devient un panneau superposé
+  // (overlay) plutôt qu'une colonne qui pousse le contenu — voir index.css
+  // (@media max-width: 768px). Une fois qu'on a choisi une page dans ce
+  // mode, on referme automatiquement le panneau pour révéler le contenu,
+  // sinon l'utilisateur devrait fermer manuellement à chaque navigation.
+  // Ne fait rien sur desktop (le panneau reste ouvert/fermé comme avant).
+  const closeIfMobile = () => {
+    if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT) setOpen(false)
+  }
+
   return (
     <>
+      {/* FIX (mobile) : bouton hamburger persistant, toujours cliquable même
+          quand le panneau est réduit à 0px de large sur petit écran (le
+          bouton habituel dans l'en-tête du sidebar disparaît alors avec
+          lui). Invisible sur desktop — voir index.css. Affiché uniquement
+          quand le menu est fermé, comme un vrai bouton d'ouverture ;
+          une fois ouvert, le bouton flèche déjà présent dans l'en-tête du
+          sidebar sert à refermer, exactement comme sur desktop. */}
+      {!open && (
+        <button
+          onClick={toggle}
+          title="Ouvrir le menu"
+          className="mobile-sidebar-toggle"
+        >
+          <SvgHamburger />
+        </button>
+      )}
+
       {open && (
         <div
           onClick={() => setOpen(false)}
-          style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 39 }}
           className="sidebar-overlay"
         />
       )}
 
       <div
-        className="sidebar"
+        className={`sidebar ${open ? 'sidebar-open' : 'sidebar-closed'}`}
         style={{
           width:      open ? 210 : 52,
           minWidth:   open ? 210 : 52,
@@ -185,6 +220,7 @@ export default function Sidebar({ section, activeTab, onTabChange }: Props) {
                     className={({ isActive }) => isActive ? 'active' : ''}
                     title={!open ? m.label : undefined}
                     style={navStyle}
+                    onClick={closeIfMobile}
                   >
                     <span className="nav-icon" style={{ flexShrink: 0 }}>{m.icon}</span>
                     <span style={{
@@ -197,7 +233,7 @@ export default function Sidebar({ section, activeTab, onTabChange }: Props) {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => m.tab && onTabChange?.(m.tab)}
+                    onClick={() => { m.tab && onTabChange?.(m.tab); closeIfMobile() }}
                     className={activeTab === m.tab ? 'active' : ''}
                     title={!open ? m.label : undefined}
                     style={navStyle}
@@ -218,7 +254,7 @@ export default function Sidebar({ section, activeTab, onTabChange }: Props) {
 
         <div className="sidebar-footer" style={{ padding: open ? '8px 12px' : '8px 6px', transition: 'padding 0.2s' }}>
           <button
-            onClick={() => navigate('/profile')}
+            onClick={() => { navigate('/profile'); closeIfMobile() }}
             title={!open ? 'Paramètres' : undefined}
             style={{
               width: '100%', display: 'flex', alignItems: 'center',

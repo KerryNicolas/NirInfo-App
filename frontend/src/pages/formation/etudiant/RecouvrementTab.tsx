@@ -239,7 +239,7 @@ export default function RecouvrementTab() {
                 </select>
               </div>
             </div>
-            <div className="form-group" style={{ maxWidth: 280 }}>
+            <div className="form-group" style={{ maxWidth: 520 }}>
               <label className="form-label">Lieu de paiement</label>
               <select className="form-control" value={form.lieu_paiement} onChange={set('lieu_paiement')}>
                 <option>Ampandrana</option><option>Ampefiloha</option><option>Andravoahangy</option>

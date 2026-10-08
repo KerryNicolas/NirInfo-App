@@ -95,6 +95,7 @@ export default function CreateUserPage() {
                 <input className="form-control" style={{ paddingLeft: 34 }} type="email"
                   value={email} onChange={e => setEmail(e.target.value)}
                   required placeholder="nom@nir-info.mg" />
+                
               </div>
             </div>
 

@@ -846,6 +846,37 @@ tbody td.td-wrap {
 .facture-sheet td, .facture-sheet th { padding: 2.2pt 3pt; font-size: 9pt; }
 
 /* ════════════════════════════════════════
+   SIDEBAR MOBILE — overlay + bouton persistant
+   (voir Sidebar.tsx) — masqués par défaut (desktop), réactivés uniquement
+   dans le @media (max-width: 768px) plus bas.
+════════════════════════════════════════ */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 105;
+}
+
+.mobile-sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 111;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  background: var(--sidebar-bg);
+  color: rgba(255,255,255,0.9);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+}
+
+/* ════════════════════════════════════════
    UTILITAIRES
 ════════════════════════════════════════ */
 .divider         { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
@@ -878,6 +909,41 @@ tbody td.td-wrap {
   .form-row-3   { grid-template-columns: 1fr; }
   .auth-left    { display: none; }
   .search-bar   { width: 180px; }
+
+  /* FIX (sidebar mobile) : sous ce seuil, le sidebar n'est plus une colonne
+     qui pousse le contenu (comme sur desktop) mais un panneau superposé
+     (overlay) qui glisse par-dessus — sorti du flux flex via
+     "position: fixed" pour que .main-content retrouve toute la largeur de
+     l'écran quand le panneau est fermé. Les tailles ("width: 210/52px")
+     restent posées en inline par Sidebar.tsx (comportement desktop
+     inchangé) ; on les corrige ici uniquement pour ce breakpoint. */
+  .sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    height: 100dvh;
+    z-index: 110;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.28);
+  }
+  .sidebar.sidebar-closed {
+    width: 0 !important;
+    min-width: 0 !important;
+    border-right: none;
+  }
+  .sidebar.sidebar-open {
+    width: 210px !important;
+    min-width: 210px !important;
+  }
+
+  /* Fond sombre derrière le panneau ouvert, pour le refermer d'un tap en
+     dehors — masqué par défaut (desktop) via la règle de base ci-dessus,
+     réactivé uniquement ici. */
+  .sidebar-overlay { display: block; }
+
+  /* Bouton hamburger persistant (voir Sidebar.tsx) — permet de rouvrir le
+     panneau même quand il est réduit à 0px de large, donc invisible/
+     inatteignable lui-même. Caché sur desktop via la règle de base. */
+  .mobile-sidebar-toggle { display: flex; }
 }
 
 /* ════════════════════════════════════════

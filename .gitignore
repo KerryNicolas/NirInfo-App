@@ -13,7 +13,14 @@ backend/bootstrap/cache/
 frontend/node_modules/
 frontend/dist/
 
+# Archives (peuvent contenir .env, vendor, node_modules) — jamais versionnées
+*.zip
+
 # OS
 .DS_Store
 Thumbs.db
 *.swp
+
+# Photos envoyées par les utilisateurs, vues à travers le lien public/storage
+backend/public/storage/photos/*
+!backend/public/storage/photos/.gitkeep

@@ -3,31 +3,13 @@ import AttestationUrl from '../assets/attestation.png'
 import TamponUrl from '../assets/tampon.png'
 import SignatureUrl from '../assets/signature.png'
 
-// FIX : génération d'un vrai PDF avec jsPDF, au lieu de s'appuyer sur
-// window.print() + une règle CSS @media print { @page {...} }. C'est ça
-// qui causait le bug de format (le certificat sortait en A5 au lieu de
-// A4 paysage) : la règle @page est globale à toute l'impression du
-// navigateur, donc si la page Facture (qui force @page A5 portrait) est
-// restée montée/active en même temps que le Certificat (qui forçait @page
-// A4 paysage), les deux règles entraient en conflit et l'une écrasait
-// l'autre. Un vrai PDF généré par jsPDF a ses propres dimensions et n'est
-// plus concerné par le CSS d'impression de la page.
+// Génération d'un vrai PDF avec jsPDF (et non window.print() + @page CSS) :
+// le PDF a ses propres dimensions et n'est pas concerné par le CSS
+// d'impression des autres pages (Facture en A5 portrait, etc.).
 
 // ─────────────────────────────────────────────────────────────────────────
-// FIX (lenteur, toujours ~20s même avec le cache précédent) : la vraie
-// cause n'était pas le chargement des images mais leur TAILLE. jsPDF doit
-// redécoder/réencoder chaque pixel de chaque image à CHAQUE appel
-// d'addImage() — donc à chaque génération de certificat, même si le
-// fichier source est en cache. Si attestation.png est une image haute
-// résolution (ce qui est courant pour un visuel pensé pour l'impression),
-// c'est ce retraitement qui prenait ~20s, encore et encore.
-//
-// Solution : redimensionner ET recompresser chaque image UNE seule fois
-// (mise en cache du résultat déjà optimisé, pas du fichier brut), et
-// passer le fond en JPEG — bien plus rapide à intégrer pour jsPDF qu'un
-// PNG (pas de canal alpha à traiter pixel par pixel). Le tampon et la
-// signature restent en PNG (ils ont besoin de la transparence pour se
-// superposer au fond) mais sont redimensionnés à une taille raisonnable.
+// Images : redimensionnées et recompressées UNE seule fois, puis mises en
+// cache (le fond en JPEG, tampon et signature en PNG pour la transparence).
 // ─────────────────────────────────────────────────────────────────────────
 interface OptimizeOpts { maxWidthPx?: number; format?: 'image/jpeg' | 'image/png'; quality?: number }
 
@@ -63,16 +45,16 @@ function loadOptimizedImage(url: string, opts: OptimizeOpts = {}): Promise<strin
   return optimizedImageCache.get(cacheKey)!
 }
 
-// Précharge et optimise les 3 images dès l'ouverture de la page
-// Certification (import du module) plutôt qu'au premier clic — le tout
-// premier certificat généré est donc déjà rapide, pas seulement les suivants.
+// Préchargement dès l'import du module : le premier certificat est déjà rapide.
 void Promise.all([
   loadOptimizedImage(AttestationUrl, { maxWidthPx: 1600, format: 'image/jpeg', quality: 0.85 }),
   loadOptimizedImage(TamponUrl,      { maxWidthPx: 500,  format: 'image/png' }),
   loadOptimizedImage(SignatureUrl,   { maxWidthPx: 250,  format: 'image/png' }),
-]).catch(() => { /* silencieux — se rechargera normalement au moment du print si besoin */ })
+]).catch(() => { /* silencieux — rechargé au moment de la génération si besoin */ })
 
-const fmtDateLongFR = (d: string) => {
+// FIX : exportée pour que l'aperçu écran utilise EXACTEMENT le même format
+// de date que le PDF (avant : « 09 février » à l'écran, « 9 février » au PDF).
+export const fmtDateLongFR = (d: string) => {
   if (!d) return ''
   const date = new Date(d)
   if (isNaN(date.getTime())) return d
@@ -87,27 +69,52 @@ export interface CertificatPdfData {
   reference: string
 }
 
-// FIX : toutes les positions sont désormais exprimées en % de la largeur/
-// hauteur de page (exactement les mêmes % que l'aperçu écran dans
-// CertificatView, CertificationTab.tsx) au lieu de millimètres fixes.
-// Avantage concret : pour passer le certificat en A5 au lieu de A4, il
-// suffit de changer PAGE_FORMAT ci-dessous — toutes les positions et les
-// tailles de police se recalculent automatiquement à l'échelle, sans
-// avoir à retoucher une seule coordonnée. (A4 paysage = 297×210mm ;
-// A5 paysage = 210×148mm, soit un format 70,7% plus petit — même
-// proportion, donc rien ne se déforme.)
-const PAGE_FORMAT: 'a4' | 'a5' = 'a5'
+// FIX : A4 paysage (297×210 mm). En 'a5', le PDF faisait 210 mm de large,
+// soit la largeur d'un A4 portrait : le navigateur le posait donc en haut
+// d'une feuille A4 portrait, d'où le certificat sur une demi-page.
+const PAGE_FORMAT: 'a4' | 'a5' = 'a4'
+
+// ─────────────────────────────────────────────────────────────────────────
+// FIX : SOURCE UNIQUE de la mise en page, utilisée par le PDF ET par
+// l'aperçu écran (CertificatView). Avant, chacun avait ses propres
+// coordonnées, donc l'aperçu ne correspondait pas à l'impression.
+//
+//  - x, y, w, cx, maxW, lineH : en % de la page (x/w/cx/maxW → largeur,
+//    y/lineH → hauteur). Pour un texte, y est la LIGNE DE BASE.
+//  - size : taille de police en points, calée sur A4.
+//
+// Pour déplacer un élément, il suffit de changer sa valeur ici.
+// ─────────────────────────────────────────────────────────────────────────
+export const CERT_LAYOUT = {
+  nom:       { y: 49,   size: 17, maxW: 42 },            // maxW = longueur du trait sous le nom
+  naissance: { y: 52.4, size: 10 },
+  session:   { y: 56.2, size: 10 },
+  formation: { y: 66.2, size: 24, maxW: 93.3, lineH: 5.7 },
+  reference: { x: 50,   y: 92.3, size: 10 },
+  // Bloc directeur : le tampon garde son emplacement d'origine, mais il
+  // est éclairci (opacity) et dessiné EN PREMIER ; la signature et le nom
+  // du directeur passent par-dessus, le nom avec un liseré clair (halo)
+  // pour rester bien lisibles. opacity : 1 = tampon plein, 0.4 = très pâle.
+  tampon:    { x: 74,   y: 82.4, w: 23.4, opacity: 0.5 }, // hauteur calculée (proportions réelles)
+  signature: { x: 84.2, y: 83.5, w: 4.4 },               // idem
+  directeur: { cx: 87,  y: 93.5, size: 10 },             // cx = centre du trait de signature
+} as const
+
+export const NOM_DIRECTEUR = 'MIHARISOA Maminirina'
+
+// Couleur du papier du certificat, utilisée pour le halo autour du nom du
+// directeur (à ajuster si le fond d'attestation.png change de teinte).
+export const HALO_RGB: [number, number, number] = [248, 247, 238]
 
 export async function generateCertificatPdf(certif: CertificatPdfData): Promise<jsPDF> {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: PAGE_FORMAT })
   const PAGE_W = doc.internal.pageSize.getWidth()
   const PAGE_H = doc.internal.pageSize.getHeight()
-  // Échelle par rapport au format A4 (297mm) sur lequel les tailles de
-  // police ci-dessous (17, 10, 24pt...) ont été calées à l'origine.
-  const SCALE = PAGE_W / 297
+  const SCALE = PAGE_W / 297 // les tailles de police sont calées sur A4
   const pt = (size: number) => size * SCALE
   const x = (pct: number) => (pct / 100) * PAGE_W
   const y = (pct: number) => (pct / 100) * PAGE_H
+  const L = CERT_LAYOUT
 
   const [attestation, tampon, signature] = await Promise.all([
     loadOptimizedImage(AttestationUrl, { maxWidthPx: 1600, format: 'image/jpeg', quality: 0.85 }),
@@ -115,68 +122,83 @@ export async function generateCertificatPdf(certif: CertificatPdfData): Promise<
     loadOptimizedImage(SignatureUrl,   { maxWidthPx: 250,  format: 'image/png' }),
   ])
 
-  // Fond
+  // Fond pleine page
   doc.addImage(attestation, 'JPEG', 0, 0, PAGE_W, PAGE_H)
 
-  const nomComplet = certif.nom_complet?.trim() || `${certif.nom || ''} ${certif.prenom || ''}`.trim()
-
-  // Nom & prénoms — emplacement inchangé (top 46.2%)
+  // Nom & prénoms
+  const nomComplet = (certif.nom_complet?.trim() || `${certif.nom || ''} ${certif.prenom || ''}`.trim()) || '—'
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(pt(17))
+  doc.setFontSize(pt(L.nom.size))
   doc.setTextColor(30, 41, 59)
-  doc.text(nomComplet || '—', PAGE_W / 2, y(49), { align: 'center' })
+  // FIX : un nom très long est réduit pour ne jamais dépasser le trait.
+  const nomW = doc.getTextWidth(nomComplet)
+  const nomMax = x(L.nom.maxW)
+  if (nomW > nomMax) doc.setFontSize(pt(L.nom.size) * (nomMax / nomW))
+  doc.text(nomComplet, PAGE_W / 2, y(L.nom.y), { align: 'center' })
 
-  // FIX : ligne manquante — "Né(e) le ... à ...", casée dans l'espace
-  // déjà libre entre le nom et la session, sans déplacer aucun élément.
+  // Né(e) le ... à ...
   if (certif.date_naissance) {
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(pt(10))
+    doc.setFontSize(pt(L.naissance.size))
     doc.setTextColor(51, 65, 85)
     const naissanceTxt = certif.lieu_naissance
       ? `Né(e) le ${fmtDateLongFR(certif.date_naissance)} à ${certif.lieu_naissance}`
       : `Né(e) le ${fmtDateLongFR(certif.date_naissance)}`
-    doc.text(naissanceTxt, PAGE_W / 2, y(52.4), { align: 'center' })
+    doc.text(naissanceTxt, PAGE_W / 2, y(L.naissance.y), { align: 'center' })
   }
 
-  // Session — emplacement inchangé (top 54%)
+  // Session (FIX orthographe : « Séssion » → « Session »)
   const fmtDebut = fmtDateLongFR(certif.debut_session)
   const fmtFin = fmtDateLongFR(certif.fin_session)
   const sessionTxt = fmtDebut === fmtFin
-    ? `Séssion du ${fmtDebut}`
-    : `Séssion du ${fmtDebut} au ${fmtFin}`
+    ? `Session du ${fmtDebut}`
+    : `Session du ${fmtDebut} au ${fmtFin}`
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(pt(10))
+  doc.setFontSize(pt(L.session.size))
   doc.setTextColor(0, 0, 0)
-  doc.text(sessionTxt, PAGE_W / 2, y(56.2), { align: 'center' })
+  doc.text(sessionTxt, PAGE_W / 2, y(L.session.y), { align: 'center' })
 
-  // Formation — emplacement inchangé (top 62.4%)
+  // Formation
   const formation = (certif.nom_formation || certif.module_nom || '—').toUpperCase()
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(pt(24))
+  doc.setFontSize(pt(L.formation.size))
   doc.setTextColor(38, 81, 134)
-  const formationLines = doc.splitTextToSize(formation, PAGE_W * 0.933)
-  const formationLineHeight = y(5.7) // ≈ 12mm sur A4 (297×210)
-  formationLines.forEach((line: string, i: number) => {
-    doc.text(line, PAGE_W / 2, y(66.2) + i * formationLineHeight, { align: 'center' })
+  const formationLines: string[] = doc.splitTextToSize(formation, x(L.formation.maxW))
+  formationLines.forEach((line, i) => {
+    doc.text(line, PAGE_W / 2, y(L.formation.y) + i * y(L.formation.lineH), { align: 'center' })
   })
 
-  // Tampon — emplacement inchangé (top 82.4%, left 74%, width 23.4%)
-  doc.addImage(tampon, 'PNG', x(74), y(82.4), x(23.4), y(14.4))
+  // Tampon et signature — FIX : la hauteur est calculée à partir des
+  // proportions réelles de l'image (avant : hauteur forcée, image déformée).
+  const tp = doc.getImageProperties(tampon)
+  const tamponW = x(L.tampon.w)
+  doc.saveGraphicsState()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  doc.setGState(new (doc as any).GState({ opacity: L.tampon.opacity }))
+  doc.addImage(tampon, 'PNG', x(L.tampon.x), y(L.tampon.y), tamponW, tamponW * (tp.height / tp.width))
+  doc.restoreGraphicsState()
 
-  // Signature — emplacement inchangé (top 85%, left 84.2%, width 4.4%)
-  doc.addImage(signature, 'PNG', x(84.2), y(85), x(4.4), y(9.1))
+  const sp = doc.getImageProperties(signature)
+  const signatureW = x(L.signature.w)
+  doc.addImage(signature, 'PNG', x(L.signature.x), y(L.signature.y), signatureW, signatureW * (sp.height / sp.width))
 
-  // Nom du directeur (texte) — emplacement inchangé (top 87%, left 74.75%, width 21.9%)
+  // Nom du directeur — sous le trait, par-dessus le tampon. Il est tracé
+  // deux fois : d'abord un contour épais couleur papier (halo) qui efface
+  // le tampon juste autour des lettres, puis le texte lui-même.
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(pt(10))
-  doc.setTextColor(30, 41, 59)
-  doc.text('MIHARISOA Maminirina', x(74.75) + x(21.9) / 2, y(90.5), { align: 'center' })
+  doc.setFontSize(pt(L.directeur.size))
+  doc.setDrawColor(...HALO_RGB)
+  doc.setLineWidth(1.1 * SCALE)
+  doc.setLineJoin('round')
+  doc.text(NOM_DIRECTEUR, x(L.directeur.cx), y(L.directeur.y), { align: 'center', renderingMode: 'stroke' })
+  doc.setTextColor(15, 23, 42)
+  doc.text(NOM_DIRECTEUR, x(L.directeur.cx), y(L.directeur.y), { align: 'center', renderingMode: 'fill' })
 
-  // Référence — emplacement inchangé (top 89.05%, left 49.8%)
+  // Référence
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(pt(10))
+  doc.setFontSize(pt(L.reference.size))
   doc.setTextColor(51, 65, 85)
-  doc.text(certif.reference || '', x(50), y(92.3))
+  doc.text(certif.reference || '', x(L.reference.x), y(L.reference.y))
 
   return doc
 }
