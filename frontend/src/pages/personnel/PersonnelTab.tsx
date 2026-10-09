@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import api from '../../api/axios'
+import api, { storageUrl } from '../../api/axios'
 import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
@@ -284,7 +284,7 @@ export default function PersonnelTab() {
                     <td>
                       <div style={{ width:36, height:36, borderRadius:'50%', overflow:'hidden', background:'#f1f5f9', display:'flex', alignItems:'center', justifyContent:'center', position:'relative' }}>
                         {p.photo_pers
-                          ? <img src={`http://localhost:8000/storage/${p.photo_pers}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                          ? <img src={storageUrl(p.photo_pers)} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                           : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                         }
                         <label onClick={ev => ev.stopPropagation()} style={{ position:'absolute', inset:0, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>

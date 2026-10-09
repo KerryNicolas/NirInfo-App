@@ -1,6 +1,17 @@
 import axios from 'axios'
 
-const API_BASE_URL = 'http://localhost:8000/api'
+// FIX : l'adresse de l'API n'est plus écrite en dur — elle vient de
+// VITE_API_URL (frontend/.env). Sans cette variable, on garde l'adresse locale
+// habituelle. Avant, VITE_API_URL existait mais n'était lue nulle part :
+// l'application ne pouvait tourner que sur le poste du développeur.
+const API_BASE_URL: string = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+
+// Racine du serveur Laravel (sans /api) : sert au cookie CSRF et aux fichiers.
+const API_ROOT_URL = API_BASE_URL.replace(/\/api\/?$/, '')
+
+// Adresse publique d'un fichier envoyé (photo…) à partir du chemin stocké en
+// base, ex. "personnels/abc.jpg" -> "<serveur>/storage/personnels/abc.jpg".
+export const storageUrl = (path: string) => `${API_ROOT_URL}/storage/${path}`
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -54,7 +65,7 @@ api.interceptors.response.use(
 
 // Appel CSRF Sanctum — hors du préfixe /api, requête séparée avec l'URL racine.
 export const getCsrfCookie = () =>
-  axios.get(`${API_BASE_URL.replace(/\/api\/?$/, '')}/sanctum/csrf-cookie`, {
+  axios.get(`${API_ROOT_URL}/sanctum/csrf-cookie`, {
     withCredentials: true,
   })
 
