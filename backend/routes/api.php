@@ -21,6 +21,7 @@ use App\Http\Controllers\PrestationController;
 use App\Http\Controllers\CompteController;
 use App\Http\Controllers\GererController;
 use App\Http\Controllers\TransferController;
+use App\Http\Controllers\PointageEtudiantController;
 
 // ── Routes publiques — throttle par route (le groupe global 'api' n'a plus de throttle) ──
 Route::middleware('throttle:6,1')->group(function () {
@@ -66,6 +67,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('inscriptions',  InscriptionController::class);
     Route::apiResource('recouvrements', RecouvrementController::class);
 
+    // Pointage des étudiants (présences par session et par jour)
+    Route::get ('/pointage-etudiant/inscrits', [PointageEtudiantController::class, 'inscrits']);
+    Route::get ('/pointage-etudiant', [PointageEtudiantController::class, 'index']);
+    Route::post('/pointage-etudiant', [PointageEtudiantController::class, 'store']);
+
     // ── Factures ──
     Route::prefix('factures')->group(function () {
         // FIX : le chemin était '/factures/suggestions' DANS le préfixe
@@ -87,6 +93,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/certifications/prix/historique', [CertificationController::class, 'getPrixHistorique'])
         ->middleware('permission:certifications.prix.manage');
     Route::post('/certifications/prix', [CertificationController::class, 'setPrix'])
+        ->middleware('permission:certifications.prix.manage');
+    // FIX : route manquante — le bouton de suppression de ModifierPrix.tsx
+    // l'appelait déjà, la méthode existait, mais rien ne les reliait.
+    Route::delete('/certifications/prix/historique/{id}', [CertificationController::class, 'deletePrixHistorique'])
         ->middleware('permission:certifications.prix.manage');
     // Saisie manuelle d'un certificat — réservée à l'admin (même permission
     // que la validation). À déclarer AVANT apiResource.
@@ -168,6 +178,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get   ('/transferts',      [TransferController::class, 'index']);
         Route::post  ('/transferts',      [TransferController::class, 'store']);
+        // FIX : route manquante — TransferController::update() existait mais
+        // n'était pas joignable, la modification d'un virement échouait.
+        Route::put   ('/transferts/{id}', [TransferController::class, 'update']);
         Route::delete('/transferts/{id}', [TransferController::class, 'destroy']);
     });
 

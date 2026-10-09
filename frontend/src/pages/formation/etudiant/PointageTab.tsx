@@ -27,22 +27,17 @@ export default function PointageTab() {
     setLoading(true); setSearched(true)
     try {
       // Charger les inscrits de la session
-      const r = await api.get('/inscriptions', { params: { search: session } })
-      const inscrits = (r.data.data ?? []).filter((i: any) => i.code_session === session)
+      // FIX : route dédiée, sans plafond. Avant, la liste passait par
+      // /inscriptions (liste PAGINÉE des paiements, 15 lignes par défaut)
+      // puis était filtrée et dédupliquée ici : une session de plus de 15
+      // lignes de paiement s'affichait incomplète. Le serveur renvoie
+      // maintenant chaque étudiant de la session une seule fois.
+      const r = await api.get('/pointage-etudiant/inscrits', { params: { session } })
+      const unique = r.data.data ?? []
 
-      // Dédupliquer par matricule
-      const seen = new Set<string>()
-      const unique = inscrits.filter((i: any) => {
-        if (seen.has(i.matricule)) return false
-        seen.add(i.matricule); return true
-      })
-
-      // Vérifier pointage existant pour cette date
-      let pointageExistant: any[] = []
-      try {
-        const pr = await api.get('/pointage-etudiant', { params: { session, date } })
-        pointageExistant = pr.data.data ?? []
-      } catch { /* endpoint optionnel */ }
+      // Pointage déjà enregistré pour cette date
+      const pr = await api.get('/pointage-etudiant', { params: { session, date } })
+      const pointageExistant: any[] = pr.data.data ?? []
 
       setRows(unique.map((i: any) => {
         const existing = pointageExistant.find((p: any) => p.matricule_etudiant === i.matricule)
@@ -66,15 +61,20 @@ export default function PointageTab() {
     setSaving(true)
     try {
       // Sauvegarder chaque ligne
-      await Promise.all(rows.map(r =>
+      // FIX : les erreurs étaient avalées (.catch(() => {})) et le message de
+      // succès s'affichait même quand rien n'était enregistré. On compte
+      // maintenant les lignes réellement refusées.
+      const results = await Promise.allSettled(rows.map(r =>
         api.post('/pointage-etudiant', {
           date,
           matricule_etudiant: r.matricule,
           session,
           present: r.present ? 1 : 0,
-        }).catch(() => {})
+        })
       ))
-      toast.success('Pointage sauvegardé avec succès')
+      const echecs = results.filter(r => r.status === 'rejected').length
+      if (echecs === 0) toast.success('Pointage sauvegardé avec succès')
+      else toast.error(`${echecs} ligne(s) sur ${rows.length} n'ont pas pu être enregistrées`)
     } catch { toast.error('Erreur lors de la sauvegarde') }
     finally { setSaving(false) }
   }
