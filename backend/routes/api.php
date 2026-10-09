@@ -68,12 +68,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Factures ──
     Route::prefix('factures')->group(function () {
+        // FIX : le chemin était '/factures/suggestions' DANS le préfixe
+        // 'factures', soit /factures/factures/suggestions — le frontend
+        // appelle /factures/suggestions et n'obtenait jamais de réponse.
+        // À déclarer AVANT les routes en {reference}.
+        Route::get('/suggestions',       [FactureController::class, 'suggestions']);
         Route::post('/generate',         [FactureController::class, 'generate']);
         Route::post('/verify',           [FactureController::class, 'verify']);
         Route::post('/print-all',        [FactureController::class, 'printAll']);
         Route::get('/{reference}/print', [FactureController::class, 'print']);
         Route::delete('/{reference}',    [FactureController::class, 'destroy']);
-        Route::get('/factures/suggestions', [FactureController::class, 'suggestions']);
     });
 
     // Certification
