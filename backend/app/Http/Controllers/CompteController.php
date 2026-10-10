@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\DepenseService;
+use App\Services\TresorerieService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -63,15 +64,28 @@ class CompteController extends BaseApiController
 
     public function destroy($id)
     {
-        // FIX : avec le suivi des dépenses, un compte encore utilisé par une
-        // opération financière (écriture du journal, dépense, virement) ne se
-        // supprime plus : ses écritures resteraient sans compte. Sans effet si
-        // le suivi est désactivé.
-        if (DepenseService::actif() && app(DepenseService::class)->compteUtilise((int) $id)) {
-            return $this->err('Ce compte est utilisé par des opérations financières : il ne peut pas être supprimé.', 422);
-        }
+        // FIX : un compte encore utilisé par une opération financière (écriture
+        // du journal ou virement — et dépense, si le suivi est activé) ne se
+        // supprime plus : ses écritures resteraient sans compte. TOUJOURS
+        // appliqué, que le suivi des dépenses soit activé ou non.
+        //
+        // Dans UNE transaction, le compte étant verrouillé d'abord : une
+        // opération en cours sur ce compte (qui le verrouille aussi, via
+        // TresorerieService) se termine avant le contrôle, qui voit alors son
+        // écriture. Le verrou doit rester la PREMIÈRE lecture de la transaction.
+        return DB::transaction(function () use ($id) {
+            DB::table('compte')->where('id_compte', $id)->lockForUpdate()->first();
 
-        DB::table('compte')->where('id_compte', $id)->delete();
-        return $this->ok('Compte supprimé avec succès');
+            $utilise = app(TresorerieService::class)->compteUtilise((int) $id)
+                || (DepenseService::actif() && app(DepenseService::class)->compteUtiliseParDepense((int) $id));
+
+            if ($utilise) {
+                return $this->err('Ce compte est utilisé par des opérations financières : il ne peut pas être supprimé.', 422);
+            }
+
+            DB::table('compte')->where('id_compte', $id)->delete();
+
+            return $this->ok('Compte supprimé avec succès');
+        });
     }
 }

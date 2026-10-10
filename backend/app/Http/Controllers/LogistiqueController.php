@@ -86,9 +86,9 @@ class LogistiqueController extends BaseApiController
         ]);
 
         DB::transaction(function () use ($request, $id) {
-            if (DepenseService::actif()) {
-                $this->depenses()->avantModification('achat', (int) $id, (float) ($request->prix_unitaire * $request->quantite), (int) auth()->id());
-            }
+            // Toujours appelé : l'autorisation (auteur ou admin) ne dépend pas
+            // du suivi des dépenses ; le reste, si. Voir DepenseService.
+            $this->depenses()->avantModification('achat', (int) $id, (float) ($request->prix_unitaire * $request->quantite), (int) auth()->id(), $this->estAdmin());
 
             DB::table('achat')->where('id_achat', $id)->update([
                 'nom_materiel'  => $request->nom_materiel,
@@ -201,9 +201,8 @@ class LogistiqueController extends BaseApiController
         ]);
 
         DB::transaction(function () use ($request, $id) {
-            if (DepenseService::actif()) {
-                $this->depenses()->avantModification('charge', (int) $id, (float) $request->montant, (int) auth()->id());
-            }
+            // Toujours appelé (voir updateAchat).
+            $this->depenses()->avantModification('charge', (int) $id, (float) $request->montant, (int) auth()->id(), $this->estAdmin());
 
             DB::table('charge')->where('id_charge', $id)->update([
                 'designation'  => $request->designation,
@@ -250,6 +249,12 @@ class LogistiqueController extends BaseApiController
     private function depenses(): DepenseService
     {
         return app(DepenseService::class);
+    }
+
+    /** Rôle admin — même critère que AdminOnlyDelete et AuthController::createUser. */
+    private function estAdmin(): bool
+    {
+        return auth()->user()?->roleRelation?->slug === 'admin';
     }
 
     /** Réponse des nouvelles routes quand le suivi des dépenses est désactivé. */

@@ -156,6 +156,32 @@ class InscriptionTresorerieTest extends TestCase
         ], $this->nouvellesEcritures());
     }
 
+    public function test_un_ancien_paiement_sans_numero_de_compte_reste_modifiable_et_supprimable(): void
+    {
+        // Paiement de l'ancien système : type_paiement est un libellé, lu comme
+        // le compte 0. C'est le SEUL compte inexistant toléré par le service.
+        $ancien = DB::table('inscription')->where('type_paiement', 'inscription')->orderBy('id_paiement')->first();
+        $this->assertNotNull($ancien, "La base de test doit contenir un paiement de l'ancien système.");
+        $soldes = DB::table('compte')->orderBy('id_compte')->pluck('montant', 'id_compte')->all();
+        $montant = (int) $ancien->montant_paye;
+
+        $this->putJson("/api/inscriptions/{$ancien->id_paiement}", ['montant_paye' => $montant + 1000, 'id_compte' => $this->compteA])->assertStatus(200);
+
+        // L'ancien mouvement est annulé sur le compte 0, le nouveau appliqué sur le compte choisi.
+        $this->assertSame([
+            ['S', $montant, 0, "correction inscription #{$ancien->id_paiement}"],
+            ['E', $montant + 1000, $this->compteA, "correction inscription #{$ancien->id_paiement}"],
+        ], $this->nouvellesEcritures());
+        $this->assertSame(100000.0 + $montant + 1000, $this->solde($this->compteA));
+
+        $this->deleteJson("/api/inscriptions/{$ancien->id_paiement}")->assertStatus(200);
+        $this->assertSame(100000.0, $this->solde($this->compteA));
+
+        // Les vrais comptes n'ont pas bougé.
+        $apres = DB::table('compte')->whereNotIn('id_compte', [$this->compteA, $this->compteB])->orderBy('id_compte')->pluck('montant', 'id_compte')->all();
+        $this->assertSame(array_diff_key($soldes, [$this->compteA => 1, $this->compteB => 1]), $apres);
+    }
+
     public function test_les_vrais_comptes_ne_sont_pas_touches(): void
     {
         $avant = DB::table('compte')->whereNotIn('id_compte', [$this->compteA, $this->compteB])->orderBy('id_compte')->pluck('montant', 'id_compte')->all();

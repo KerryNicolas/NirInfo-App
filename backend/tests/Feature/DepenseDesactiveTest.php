@@ -77,11 +77,75 @@ class DepenseDesactiveTest extends TestCase
         $ecriture = DB::table('transaction')->insertGetId(['transaction_type' => 'S', 'amount' => 1000, 'reson' => 'achat', 'account' => $compte], 'id_transaction');
         DB::table('achat')->insert(['nom_materiel' => 'TEST-DESACTIVE lié', 'prix_unitaire' => 1000, 'quantite' => 1, 'montant' => 1000, 'date_achat' => '2026-10-10', 'photo_achat' => '', 'id_transaction' => $ecriture]);
 
-        // Aucune protection particulière dans ce mode : l'écriture se supprime, le compte aussi.
+        // Dans ce mode, une écriture rattachée à une dépense n'est pas protégée : elle se
+        // supprime depuis la Gestion. Le compte, qui n'a alors plus aucune écriture, aussi.
         $this->deleteJson("/api/gerer/{$ecriture}")->assertStatus(200);
         $this->assertSame(0, DB::table('transaction')->where('id_transaction', $ecriture)->count());
         $this->deleteJson("/api/comptes-budget/{$compte}")->assertStatus(200);
         $this->assertSame(0, DB::table('compte')->where('id_compte', $compte)->count());
+    }
+
+    /* ── Règles appliquées TOUJOURS, même avec le suivi désactivé ── */
+
+    public function test_la_modification_reste_reservee_a_l_auteur_et_a_l_administrateur(): void
+    {
+        $admin  = User::whereHas('roleRelation', fn ($q) => $q->where('slug', 'admin'))->firstOrFail();
+        $roleUser = DB::table('roles')->where('slug', 'user')->value('id');
+        $auteur = $admin->replicate(); $auteur->email = 'phpunit-off-a@test.local'; $auteur->matricule = 'TEST-OFF-A'; $auteur->role_id = $roleUser; $auteur->save();
+        $tiers  = $admin->replicate(); $tiers->email  = 'phpunit-off-b@test.local'; $tiers->matricule  = 'TEST-OFF-B'; $tiers->role_id  = $roleUser; $tiers->save();
+
+        $achat = (int) $this->actingAs($auteur)->postJson('/api/achats', self::ACHAT)->assertStatus(201)->json('id');
+
+        $this->actingAs($tiers)->putJson("/api/achats/{$achat}", ['quantite' => 9] + self::ACHAT)
+            ->assertStatus(403)->assertJsonPath('message', "Seul l'administrateur ou l'auteur de la saisie peut modifier cette dépense.");
+        $this->assertSame(2000.0, (float) DB::table('achat')->where('id_achat', $achat)->value('montant'));
+
+        $this->actingAs($auteur)->putJson("/api/achats/{$achat}", ['quantite' => 3] + self::ACHAT)->assertStatus(200);
+        $this->actingAs($admin)->putJson("/api/achats/{$achat}", ['quantite' => 4] + self::ACHAT)->assertStatus(200);
+        $this->assertSame(4000.0, (float) DB::table('achat')->where('id_achat', $achat)->value('montant'));
+
+        // Une dépense de l'ancien système n'a pas d'auteur exploitable : l'administrateur seulement.
+        $ancien = DB::table('charge')->where('ancien_systeme', 1)->orderBy('id_charge')->first();
+        $this->actingAs($auteur)->putJson("/api/charges/{$ancien->id_charge}", self::CHARGE)->assertStatus(403);
+        $this->assertEquals($ancien, DB::table('charge')->where('id_charge', $ancien->id_charge)->first());
+        $this->actingAs($admin)->putJson("/api/charges/{$ancien->id_charge}", self::CHARGE)->assertStatus(200);
+    }
+
+    public function test_un_compte_utilise_ne_se_supprime_pas(): void
+    {
+        $message = 'Ce compte est utilisé par des opérations financières : il ne peut pas être supprimé.';
+
+        // 1. Compte portant une écriture du journal.
+        $journal = DB::table('compte')->insertGetId(['account_number' => 'TEST-DJ', 'libelle' => 'TEST DESACTIVE JOURNAL', 'montant' => 500], 'id_compte');
+        DB::table('transaction')->insert(['transaction_type' => 'E', 'amount' => 500, 'reson' => 'TEST', 'account' => $journal]);
+        $this->deleteJson("/api/comptes-budget/{$journal}")->assertStatus(422)->assertJsonPath('message', $message);
+
+        // 2. Comptes cités seulement par un virement (journal vide).
+        $depart  = DB::table('compte')->insertGetId(['account_number' => 'TEST-DV1', 'libelle' => 'TEST DESACTIVE DEPART', 'montant' => 0], 'id_compte');
+        $arrivee = DB::table('compte')->insertGetId(['account_number' => 'TEST-DV2', 'libelle' => 'TEST DESACTIVE ARRIVEE', 'montant' => 0], 'id_compte');
+        DB::table('transfer')->insert(['starting_account' => $depart, 'destination_account' => $arrivee, 'amount' => 100]);
+        $this->deleteJson("/api/comptes-budget/{$depart}")->assertStatus(422);
+        $this->deleteJson("/api/comptes-budget/{$arrivee}")->assertStatus(422);
+
+        $this->assertSame(3, DB::table('compte')->whereIn('id_compte', [$journal, $depart, $arrivee])->count());
+
+        // 3. Compte sans écriture ni virement : il se supprime.
+        $vierge = DB::table('compte')->insertGetId(['account_number' => 'TEST-DN', 'libelle' => 'TEST DESACTIVE VIERGE', 'montant' => 0], 'id_compte');
+        $this->deleteJson("/api/comptes-budget/{$vierge}")->assertStatus(200);
+        $this->assertSame(0, DB::table('compte')->where('id_compte', $vierge)->count());
+    }
+
+    public function test_les_motifs_reserves_sont_refuses_dans_la_gestion(): void
+    {
+        $compte = DB::table('compte')->insertGetId(['account_number' => 'TEST-DM', 'libelle' => 'TEST DESACTIVE MOTIF', 'montant' => 5000], 'id_compte');
+
+        foreach (['achat', ' Charge ', 'INSCRIPTION', 'Certification CERT-1', 'suppression inscription #5'] as $motif) {
+            $this->postJson('/api/gerer', ['compte' => $compte, 'type' => 'S', 'montant' => 100, 'raison' => $motif])->assertStatus(422);
+        }
+        $this->postJson('/api/gerer', ['compte' => $compte, 'type' => 'S', 'montant' => 100, 'raison' => 'Achat de balais et de rasta'])->assertStatus(201);
+        $this->postJson('/api/gerer', ['compte' => $compte, 'type' => 'S', 'montant' => 100, 'raison' => 'Paiement salaire'])->assertStatus(201);
+
+        $this->assertSame(4800.0, (float) DB::table('compte')->where('id_compte', $compte)->value('montant'));
     }
 
     public function test_aucune_requete_ne_touche_les_colonnes_du_suivi(): void

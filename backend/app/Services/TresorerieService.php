@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * Service de trésorerie — point unique d'écriture « solde + journal ».
@@ -19,6 +20,21 @@ class TresorerieService
 {
     /** Colonnes de traçabilité du journal (migration 2026_10_11_000002). */
     private const TRACE = ['type_operation', 'origine_table', 'origine_id', 'transaction_annulee_id', 'reference_virement', 'cree_par'];
+
+    /** Numéro lu pour les paiements de l'ancien système, dont le compte est un libellé. */
+    private const COMPTE_HISTORIQUE = 0;
+
+    /**
+     * Un compte est « utilisé » dès qu'une écriture du journal ou un virement
+     * le cite. Ne lit que des colonnes d'origine : utilisable sur toute base,
+     * migrée ou non. (Les virements ne sont pas écrits au journal : un compte
+     * peut donc être utilisé par un virement avec un journal vide.)
+     */
+    public function compteUtilise(int $idCompte): bool
+    {
+        return DB::table('transaction')->where('account', $idCompte)->exists()
+            || DB::table('transfer')->where('starting_account', $idCompte)->orWhere('destination_account', $idCompte)->exists();
+    }
 
     /**
      * Enregistre un mouvement : solde du compte, journal `transaction` et
@@ -39,10 +55,19 @@ class TresorerieService
     {
         return DB::transaction(function () use ($idCompte, $montant, $sens, $raison, $trace) {
             // Verrou sur la ligne du compte jusqu'à la fin de la transaction.
-            // Un compte inexistant ne lève pas d'erreur, comme avant : certains
-            // anciens paiements portent un libellé (« Mobile Money ») au lieu
-            // d'un numéro de compte, et doivent rester modifiables.
-            DB::table('compte')->where('id_compte', $idCompte)->lockForUpdate()->first();
+            $compte = DB::table('compte')->where('id_compte', $idCompte)->lockForUpdate()->first();
+
+            // FIX : on n'écrit plus au journal sur un compte qui n'existe pas
+            // (ou qui vient d'être supprimé) — l'écriture resterait sans compte.
+            // SEULE EXCEPTION, le compte 0 : les paiements de l'ancien système
+            // portent un libellé (« inscription », « Mobile Money »…) au lieu
+            // d'un numéro, lu comme 0 ; ils doivent rester modifiables, et
+            // leur écriture se journalise sur le compte 0 comme avant.
+            // Lu sur la ligne VERROUILLÉE : une suppression concurrente du
+            // compte est donc vue ici.
+            if (!$compte && $idCompte !== self::COMPTE_HISTORIQUE) {
+                throw new HttpException(422, "Le compte n° {$idCompte} n'existe pas ou vient d'être supprimé : opération refusée.");
+            }
 
             if ($sens === 'E') {
                 DB::table('compte')->where('id_compte', $idCompte)->increment('montant', $montant);

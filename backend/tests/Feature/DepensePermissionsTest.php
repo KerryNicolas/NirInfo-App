@@ -89,7 +89,10 @@ class DepensePermissionsTest extends TestCase
 
         // Ce qu'il peut faire : modifier sa saisie, consulter l'historique.
         $this->putJson("/api/achats/{$id}", ['nom_materiel' => 'TEST-DROITS corrigé', 'prix_unitaire' => 1000, 'quantite' => 2, 'date_achat' => now()->toDateString()])->assertStatus(200);
-        $this->getJson("/api/achats/{$id}/historique")->assertOk()->assertJsonCount(1, 'data');
+        // La modification laisse sa trace dans l'historique, après la saisie.
+        $historique = $this->getJson("/api/achats/{$id}/historique")->assertOk()->assertJsonCount(2, 'data')->json('data');
+        $this->assertSame(['saisie', 'modification'], array_column($historique, 'action'));
+        $this->assertSame($this->simple->id, (int) $historique[1]['user_id']);
 
         // Ce qui lui est refusé.
         $this->postJson("/api/achats/{$id}/valider")->assertStatus(403);
@@ -125,6 +128,33 @@ class DepensePermissionsTest extends TestCase
             ->assertStatus(403)->assertJsonPath('message', "Seul l'administrateur ou l'auteur de la saisie peut annuler cette dépense.");
 
         $this->assertSame('enregistree', $this->statut($id));
+    }
+
+    public function test_seuls_l_auteur_et_l_administrateur_modifient_une_depense(): void
+    {
+        $id = $this->creerAchat($this->simple);
+        $saisie = ['nom_materiel' => 'TEST-DROITS', 'prix_unitaire' => 1000, 'quantite' => 4, 'date_achat' => now()->toDateString()];
+
+        // Un autre utilisateur simple, qui n'a pas saisi cette dépense.
+        $tiers = $this->simple->replicate();
+        $tiers->email = 'phpunit-tiers@test.local';
+        $tiers->matricule = 'TEST-PHPUNIT-TIERS';
+        $tiers->save();
+
+        $this->actingAs($tiers)->putJson("/api/achats/{$id}", $saisie)
+            ->assertStatus(403)->assertJsonPath('message', "Seul l'administrateur ou l'auteur de la saisie peut modifier cette dépense.");
+        $this->assertSame(2000.0, (float) DB::table('achat')->where('id_achat', $id)->value('montant'), 'Le montant ne doit pas avoir changé.');
+
+        // L'auteur, puis l'administrateur.
+        $this->actingAs($this->simple)->putJson("/api/achats/{$id}", $saisie)->assertStatus(200);
+        $this->assertSame(4000.0, (float) DB::table('achat')->where('id_achat', $id)->value('montant'));
+        $this->actingAs($this->admin)->putJson("/api/achats/{$id}", ['quantite' => 5] + $saisie)->assertStatus(200);
+        $this->assertSame(5000.0, (float) DB::table('achat')->where('id_achat', $id)->value('montant'));
+
+        // Même règle pour une charge.
+        $charge = (int) $this->actingAs($this->simple)->postJson('/api/charges', ['designation' => 'TEST-DROITS', 'montant' => 700, 'mois' => 10, 'annee' => 2026, 'date' => now()->toDateString()])->assertStatus(201)->json('id');
+        $this->actingAs($tiers)->putJson("/api/charges/{$charge}", ['designation' => 'TEST-DROITS', 'montant' => 900, 'mois' => 10, 'annee' => 2026, 'date' => now()->toDateString()])->assertStatus(403);
+        $this->assertSame(700.0, (float) DB::table('charge')->where('id_charge', $charge)->value('montant'));
     }
 
     public function test_l_administrateur_peut_tout_faire_y_compris_annuler_la_depense_d_un_autre(): void

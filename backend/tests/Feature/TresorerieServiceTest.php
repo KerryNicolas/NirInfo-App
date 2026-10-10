@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Services\TresorerieService;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 // Le service de trésorerie écrit ensemble le solde, le journal et
@@ -90,8 +91,39 @@ class TresorerieServiceTest extends TestCase
         $this->assertSame($gestionAvant, DB::table('gestion_compte')->count());
     }
 
+    public function test_un_compte_inexistant_est_refuse_sans_rien_ecrire(): void
+    {
+        $lignes  = DB::table('transaction')->count();
+        $gestion = DB::table('gestion_compte')->count();
+        $soldes  = DB::table('compte')->orderBy('id_compte')->pluck('montant', 'id_compte')->all();
+
+        foreach (['E', 'S'] as $sens) {
+            try {
+                $this->service->mouvement(999999999, 5000, $sens, 'test compte inexistant');
+                $this->fail("Un mouvement {$sens} sur un compte inexistant aurait dû être refusé.");
+            } catch (HttpException $e) {
+                $this->assertSame(422, $e->getStatusCode());
+                $this->assertStringContainsString("n'existe pas", $e->getMessage());
+            }
+        }
+
+        $this->assertSame($lignes, DB::table('transaction')->count(), 'Aucune écriture ne doit être créée.');
+        $this->assertSame($gestion, DB::table('gestion_compte')->count());
+        $this->assertSame($soldes, DB::table('compte')->orderBy('id_compte')->pluck('montant', 'id_compte')->all());
+    }
+
+    public function test_un_compte_supprime_entre_temps_est_refuse(): void
+    {
+        DB::table('compte')->where('id_compte', $this->compte)->delete();
+
+        $this->expectException(HttpException::class);
+        $this->service->mouvement($this->compte, 1000, 'E', 'test compte supprimé');
+    }
+
     public function test_compte_inexistant_comportement_historique_conserve(): void
     {
+        // SEULE exception au refus ci-dessus, le compte 0 : les paiements de
+        // l'ancien système portent un libellé au lieu d'un numéro de compte.
         // Comportement d'avant la phase 1, volontairement conservé : pas
         // d'erreur, l'écriture est journalisée, aucun solde n'est modifié.
         $soldes = DB::table('compte')->orderBy('id_compte')->pluck('montant', 'id_compte')->all();

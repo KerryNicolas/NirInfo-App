@@ -74,6 +74,68 @@ class GestionNonRegressionTest extends TestCase
         $this->assertSame([['S', 1000, $this->compte, 'TEST modifiée']], $this->ecritures());
     }
 
+    public function test_les_motifs_reserves_sont_refuses(): void
+    {
+        // Motifs que l'application génère elle-même, et que la liste de la
+        // Gestion masque : saisis à la main, ils rendraient l'opération invisible.
+        $reserves = [
+            'achat', 'charge', 'inscription', 'recouvrement', 'prestation', 'recouvrement_prestation', 'certificat',
+            'ACHAT', ' Achat ', 'Charge', "inscription\t",              // casse et espaces autour
+            'Certification CERT-2026-0001', 'certification', 'correction inscription #12',
+            'Correction Recouvrement #7', 'suppression inscription #6644', 'suppression recouvrement #1',
+        ];
+
+        foreach ($reserves as $motif) {
+            foreach (['E', 'S'] as $type) {
+                $this->postJson('/api/gerer', ['compte' => $this->compte, 'type' => $type, 'montant' => 100, 'raison' => $motif])
+                    ->assertStatus(422, "« {$motif} » ({$type}) aurait dû être refusé.");
+            }
+        }
+
+        $this->assertSame(10000.0, $this->solde());
+        $this->assertSame([], $this->ecritures());
+    }
+
+    public function test_les_motifs_libres_restent_acceptes(): void
+    {
+        // Y compris ceux qui CONTIENNENT un mot réservé : seule la correspondance exacte est refusée.
+        $libres = ['Achat de balais et de rasta', 'Achat farilac (2 pcs)', 'Paiement salaire', 'frais Mr Edmond',
+                   "Frais d'inscription au salon", 'charges diverses', 'achats', 'Dépot admin'];
+
+        foreach ($libres as $motif) {
+            $this->postJson('/api/gerer', ['compte' => $this->compte, 'type' => 'E', 'montant' => 100, 'raison' => $motif])
+                ->assertStatus(201, "« {$motif} » aurait dû être accepté.");
+        }
+
+        $this->assertSame(10000.0 + 100 * count($libres), $this->solde());
+        $this->assertSame($libres, array_column($this->ecritures(), 3));
+    }
+
+    public function test_une_operation_ne_peut_pas_prendre_un_motif_reserve_a_la_modification(): void
+    {
+        $id = $this->operation('E', 2500);
+
+        $this->putJson("/api/gerer/{$id}", ['compte' => $this->compte, 'type' => 'E', 'montant' => 2500, 'raison' => 'achat'])->assertStatus(422);
+        $this->putJson("/api/gerer/{$id}", ['compte' => $this->compte, 'type' => 'E', 'montant' => 2500, 'raison' => ' Inscription '])->assertStatus(422);
+
+        $this->assertSame([['E', 2500, $this->compte, 'TEST opération manuelle']], $this->ecritures(), "L'opération ne doit pas avoir changé.");
+        $this->assertSame(12500.0, $this->solde());
+    }
+
+    public function test_un_compte_portant_une_operation_ne_se_supprime_pas(): void
+    {
+        $id = $this->operation('E', 2500);
+
+        $this->deleteJson("/api/comptes-budget/{$this->compte}")
+            ->assertStatus(422)->assertJsonPath('message', 'Ce compte est utilisé par des opérations financières : il ne peut pas être supprimé.');
+        $this->assertSame(1, DB::table('compte')->where('id_compte', $this->compte)->count());
+
+        // Une fois l'opération supprimée, le compte n'a plus d'écriture : il redevient supprimable.
+        $this->deleteJson("/api/gerer/{$id}")->assertStatus(200);
+        $this->deleteJson("/api/comptes-budget/{$this->compte}")->assertStatus(200);
+        $this->assertSame(0, DB::table('compte')->where('id_compte', $this->compte)->count());
+    }
+
     public function test_la_suppression_d_une_operation_retablit_le_solde(): void
     {
         $id = $this->operation('S', 4000);

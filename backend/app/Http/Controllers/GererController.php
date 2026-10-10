@@ -21,6 +21,34 @@ class GererController extends BaseApiController
         return null;
     }
 
+    // FIX : motifs réservés aux écritures que l'application génère elle-même.
+    // index() masque ces motifs dans la liste : une opération manuelle saisie
+    // sous l'un d'eux devenait invisible ici, et se confondait au journal avec
+    // un encaissement ou une dépense. TOUJOURS appliqué.
+    // Comparaison sans tenir compte de la casse ni des espaces autour (c'est
+    // ainsi que la base compare ces textes). Correspondance EXACTE pour les
+    // motifs simples : « Achat de balais » ou « Paiement salaire » restent
+    // des motifs libres parfaitement valables.
+    private const MOTIFS_RESERVES = ['inscription', 'recouvrement', 'achat', 'charge', 'prestation', 'recouvrement_prestation', 'certificat'];
+    private const PREFIXES_RESERVES = [
+        'certification ', 'correction inscription #', 'correction recouvrement #',
+        'suppression inscription #', 'suppression recouvrement #',
+    ];
+
+    private function refusSiMotifReserve(?string $raison)
+    {
+        $motif = mb_strtolower(trim((string) $raison));
+
+        $reserve = in_array($motif, self::MOTIFS_RESERVES, true);
+        foreach (self::PREFIXES_RESERVES as $prefixe) {
+            $reserve = $reserve || str_starts_with($motif . ' ', $prefixe) || str_starts_with($motif, $prefixe);
+        }
+
+        return $reserve
+            ? $this->err("Ce motif est réservé aux écritures générées par l'application. Choisissez un autre libellé, par exemple « Achat de fournitures ».", 422)
+            : null;
+    }
+
     // ─── Liste des transactions manuelles (dépôts/retraits), en excluant celles
     // générées automatiquement par les autres modules (inscription, recouvrement,
     // charge, achat, prestation) — même logique que TransactionModel::getAll() en CI ──
@@ -58,6 +86,8 @@ class GererController extends BaseApiController
             'montant' => 'required|numeric|min:1',
             'raison'  => 'required|string|max:255',
         ]);
+
+        if ($refus = $this->refusSiMotifReserve($request->raison)) return $refus;
 
         // Empêche un retrait supérieur au solde disponible
         if ($request->type === 'S') {
@@ -101,6 +131,8 @@ class GererController extends BaseApiController
             'montant' => 'required|numeric|min:1',
             'raison'  => 'required|string|max:255',
         ]);
+
+        if ($refus = $this->refusSiMotifReserve($request->raison)) return $refus;
 
         $original = DB::table('transaction')->where('id_transaction', $id)->first();
         if (!$original) {

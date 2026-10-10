@@ -217,14 +217,61 @@ class DepenseWorkflowTest extends TestCase
         $this->assertSame([], $this->ecritures());
     }
 
-    public function test_un_montant_avec_decimales_ne_peut_pas_etre_paye(): void
+    public function test_un_montant_avec_decimales_est_refuse_des_la_validation(): void
     {
-        $id = $this->achatValide(10.5, 1);
+        // Le journal est en ariary entiers : refusé à la validation, pour que
+        // la dépense ne reste pas bloquée à « validée » sans pouvoir être payée.
+        $id = $this->creerAchat(10.5, 1);
 
-        $this->postJson("/api/achats/{$id}/payer", ['id_compte' => $this->compteA])
-            ->assertStatus(422)->assertJsonPath('message', "Le montant doit être un nombre entier d'ariary pour être payé.");
+        $this->postJson("/api/achats/{$id}/valider")
+            ->assertStatus(422)->assertJsonPath('message', "Le montant doit être un nombre entier d'ariary pour être validé.");
 
+        $this->assertSame('enregistree', $this->achat($id)->statut);
         $this->assertSame([], $this->ecritures());
+
+        // Une fois le montant corrigé, la dépense se valide et se paie normalement.
+        $this->putJson("/api/achats/{$id}", ['nom_materiel' => 'TEST-DEPENSE', 'prix_unitaire' => 11, 'quantite' => 1, 'date_achat' => now()->toDateString()])->assertStatus(200);
+        $this->postJson("/api/achats/{$id}/valider")->assertStatus(200);
+        $this->postJson("/api/achats/{$id}/payer", ['id_compte' => $this->compteA])->assertStatus(200);
+        $this->assertSame(49989.0, $this->solde($this->compteA));
+    }
+
+    public function test_un_ecart_d_arrondi_ne_fait_pas_perdre_la_validation(): void
+    {
+        // 0,1 x 30 vaut 3,0000000000000004 en calcul flottant, et 3,00 en base.
+        $saisie = ['nom_materiel' => 'TEST-DEPENSE', 'prix_unitaire' => 0.1, 'quantite' => 30, 'date_achat' => now()->toDateString()];
+        $id = $this->creerAchat(0.1, 30);
+        $this->postJson("/api/achats/{$id}/valider")->assertStatus(200);
+
+        $this->putJson("/api/achats/{$id}", $saisie)->assertStatus(200);
+
+        $this->assertSame('validee', $this->achat($id)->statut, 'Le montant est identique au centime près : la validation doit être conservée.');
+        $this->assertSame(['saisie', 'validation', 'modification'], $this->actions('achat', $id));
+    }
+
+    public function test_chaque_modification_est_tracee_avec_l_ancien_montant(): void
+    {
+        $id = $this->creerAchat(1000, 3);
+
+        $this->putJson("/api/achats/{$id}", ['nom_materiel' => 'TEST-DEPENSE', 'prix_unitaire' => 1000, 'quantite' => 5, 'date_achat' => now()->toDateString()])->assertStatus(200);
+
+        $evenements = DB::table('depense_evenements')->where('type_depense', 'achat')->where('id_depense', $id)->orderBy('id')->get();
+        $this->assertSame(['saisie', 'modification'], $evenements->pluck('action')->all());
+        $modif = $evenements[1];
+        $this->assertSame(
+            ['enregistree', 'enregistree', 5000.0, 'Ancien montant : 3 000 Ar', $this->admin->id],
+            [$modif->statut_avant, $modif->statut_apres, (float) $modif->montant, $modif->motif, (int) $modif->user_id]
+        );
+        $this->assertNotNull($modif->created_at);
+        $this->assertSame([], $this->ecritures(), 'Modifier une dépense non payée ne crée aucune écriture.');
+    }
+
+    public function test_annuler_le_paiement_d_une_depense_non_payee_est_refuse(): void
+    {
+        $id = $this->achatValide();
+
+        $this->postJson("/api/achats/{$id}/annuler-paiement", ['motif' => 'test'])
+            ->assertStatus(422)->assertJsonPath('message', 'Cette dépense est au statut « validée » : son paiement ne peut pas être annulé.');
     }
 
     public function test_annuler_un_paiement_exige_un_motif(): void
@@ -284,7 +331,12 @@ class DepenseWorkflowTest extends TestCase
         $this->putJson("/api/achats/{$id}", ['prix_unitaire' => 2000] + $meme)->assertStatus(200);
         $a = $this->achat($id);
         $this->assertSame(['enregistree', null, 4000.0], [$a->statut, $a->valide_par, (float) $a->montant]);
-        $this->assertSame(['saisie', 'validation', 'retour_enregistree'], $this->actions('achat', $id));
+        // La première modification (montant inchangé) est tracée ; la seconde renvoie la dépense à « enregistrée ».
+        $this->assertSame(['saisie', 'validation', 'modification', 'retour_enregistree'], $this->actions('achat', $id));
+        $this->assertSame(
+            'Montant modifié après validation. Ancien montant : 3 000 Ar',
+            DB::table('depense_evenements')->where('type_depense', 'achat')->where('id_depense', $id)->where('action', 'retour_enregistree')->value('motif')
+        );
         $this->postJson("/api/achats/{$id}/payer", ['id_compte' => $this->compteA])->assertStatus(422);
     }
 

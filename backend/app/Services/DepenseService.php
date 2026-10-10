@@ -76,10 +76,15 @@ class DepenseService
         return $this->operation(function () use ($type, $id, $userId) {
             $d = $this->verrouiller($type, $id);
             $this->refuserAncienSysteme($d);
-            $this->exigerStatut($d, [self::ENREGISTREE], 'validée');
+            $this->exigerStatut($d, [self::ENREGISTREE], 'elle ne peut pas être validée');
 
             if ((float) $d->montant <= 0) {
                 throw new HttpException(422, 'Le montant doit être supérieur à 0 pour valider cette dépense.');
+            }
+            // Refusé dès la validation : le journal est en ariary entiers, une
+            // dépense à décimales resterait sinon bloquée à « validée ».
+            if (floor((float) $d->montant) != (float) $d->montant) {
+                throw new HttpException(422, "Le montant doit être un nombre entier d'ariary pour être validé.");
             }
 
             $this->modifier($type, $id, [
@@ -99,7 +104,7 @@ class DepenseService
         return $this->operation(function () use ($type, $id, $idCompte, $userId) {
             $d = $this->verrouiller($type, $id);
             $this->refuserAncienSysteme($d);
-            $this->exigerStatut($d, [self::VALIDEE], 'payée');
+            $this->exigerStatut($d, [self::VALIDEE], 'elle ne peut pas être payée');
 
             if ((int) $d->id_transaction !== 0) {
                 throw new HttpException(422, 'Cette dépense est déjà rattachée à une écriture du journal.');
@@ -158,7 +163,7 @@ class DepenseService
         return $this->operation(function () use ($type, $id, $motif, $userId) {
             $d = $this->verrouiller($type, $id);
             $this->refuserAncienSysteme($d);
-            $this->exigerStatut($d, [self::PAYEE], 'remboursée');
+            $this->exigerStatut($d, [self::PAYEE], 'son paiement ne peut pas être annulé');
             $motif = $this->exigerMotif($motif);
 
             $origine = DB::table('transaction')->where('id_transaction', $d->id_transaction)->lockForUpdate()->first();
@@ -222,7 +227,7 @@ class DepenseService
             if ($d->statut === self::PAYEE) {
                 throw new HttpException(422, "Cette dépense est payée : annulez d'abord son paiement.");
             }
-            $this->exigerStatut($d, [self::ENREGISTREE, self::VALIDEE], 'annulée');
+            $this->exigerStatut($d, [self::ENREGISTREE, self::VALIDEE], 'elle ne peut pas être annulée');
             $motif = $this->exigerMotif($motif);
 
             $this->modifier($type, $id, [
@@ -250,26 +255,57 @@ class DepenseService
     }
 
     /**
-     * Avant modification : refuse une dépense de l'ancien système, payée ou
-     * annulée ; ramène une dépense validée à « enregistree » si son montant
-     * change (elle devra être validée à nouveau).
+     * Avant modification d'une dépense.
+     *
+     * 1. AUTORISATION — toujours, que le suivi soit activé ou non : seuls
+     *    l'administrateur et l'auteur de la saisie peuvent modifier une
+     *    dépense. Ne lit que des colonnes d'origine (matricule_s contient
+     *    l'identifiant de l'utilisateur qui a saisi). Une dépense de l'ancien
+     *    système n'a pas d'auteur exploitable : seul l'administrateur y accède.
+     *
+     * 2. SUIVI — seulement s'il est activé : refuse une dépense de l'ancien
+     *    système, payée ou annulée ; trace chaque modification avec l'ancien
+     *    et le nouveau montant ; ramène une dépense validée à « enregistree »
+     *    si son montant change (elle devra être validée à nouveau).
      */
-    public function avantModification(string $type, int $id, float $nouveauMontant, int $userId): void
+    public function avantModification(string $type, int $id, float $nouveauMontant, int $userId, bool $estAdmin): void
     {
         $d = DB::table(self::TYPES[$type]['table'])->where(self::TYPES[$type]['cle'], $id)->lockForUpdate()->first();
         if (!$d) {
             return; // ligne inexistante : comportement d'avant conservé
         }
 
-        $this->refuserAncienSysteme($d);
-        $this->exigerStatut($d, [self::ENREGISTREE, self::VALIDEE], 'modifiée');
+        if (!$estAdmin && (string) $d->matricule_s !== (string) $userId) {
+            throw new HttpException(403, "Seul l'administrateur ou l'auteur de la saisie peut modifier cette dépense.");
+        }
 
-        if ($d->statut === self::VALIDEE && (float) $d->montant != $nouveauMontant) {
+        if (!self::actif()) {
+            return;
+        }
+
+        $this->refuserAncienSysteme($d);
+        $this->exigerStatut($d, [self::ENREGISTREE, self::VALIDEE], 'elle ne peut pas être modifiée');
+
+        // Montants comparés à 2 décimales (la précision de la colonne) : un
+        // écart de calcul en virgule flottante n'est pas un changement.
+        $ancien  = round((float) $d->montant, 2);
+        $nouveau = round($nouveauMontant, 2);
+        $trace   = sprintf('Ancien montant : %s Ar', $this->ar2($ancien));
+
+        if ($d->statut === self::VALIDEE && $ancien != $nouveau) {
             $this->modifier($type, $id, ['statut' => self::ENREGISTREE, 'valide_par' => null, 'date_validation' => null]);
             $this->evenement($type, $id, 'retour_enregistree', self::VALIDEE, self::ENREGISTREE, $userId, [
-                'montant' => $nouveauMontant, 'motif' => 'Montant modifié après validation',
+                'montant' => $nouveau, 'motif' => 'Montant modifié après validation. ' . $trace,
             ]);
+
+            return;
         }
+
+        // Toute autre modification laisse aussi une trace : qui, quand, et le
+        // montant avant / après (identiques si seul le libellé ou la date change).
+        $this->evenement($type, $id, 'modification', $d->statut, $d->statut, $userId, [
+            'montant' => $nouveau, 'motif' => $trace,
+        ]);
     }
 
     /** Avant suppression : seule une dépense « enregistree » se supprime ; les autres gardent leur trace. */
@@ -281,7 +317,7 @@ class DepenseService
         }
 
         $this->refuserAncienSysteme($d);
-        $this->exigerStatut($d, [self::ENREGISTREE], 'supprimée');
+        $this->exigerStatut($d, [self::ENREGISTREE], 'elle ne peut pas être supprimée');
         $this->evenement($type, $id, 'suppression', $d->statut, null, $userId, ['montant' => $d->montant]);
     }
 
@@ -310,13 +346,15 @@ class DepenseService
         return DB::table('transaction')->where('transaction_annulee_id', $transaction->id_transaction)->exists();
     }
 
-    /** Un compte encore utilisé par une opération financière ne se supprime pas. */
-    public function compteUtilise(int $idCompte): bool
+    /**
+     * Le compte est-il cité par une dépense ? Complète
+     * TresorerieService::compteUtilise() (journal et virements) ; lit une
+     * colonne du suivi, donc à n'appeler que si le suivi est activé.
+     */
+    public function compteUtiliseParDepense(int $idCompte): bool
     {
-        return DB::table('transaction')->where('account', $idCompte)->exists()
-            || DB::table('achat')->where('id_compte', $idCompte)->exists()
-            || DB::table('charge')->where('id_compte', $idCompte)->exists()
-            || DB::table('transfer')->where('starting_account', $idCompte)->orWhere('destination_account', $idCompte)->exists();
+        return DB::table('achat')->where('id_compte', $idCompte)->exists()
+            || DB::table('charge')->where('id_compte', $idCompte)->exists();
     }
 
     /* ═══════════════════════════════════════════
@@ -413,12 +451,13 @@ class DepenseService
         }
     }
 
-    private function exigerStatut(object $d, array $admis, string $action): void
+    /** @param string $refus  suite du message, ex. « elle ne peut pas être payée » */
+    private function exigerStatut(object $d, array $admis, string $refus): void
     {
         if (!in_array($d->statut, $admis, true)) {
             throw new HttpException(422, sprintf(
-                'Cette dépense est au statut « %s » : elle ne peut pas être %s.',
-                self::LIBELLES[$d->statut] ?? $d->statut, $action
+                'Cette dépense est au statut « %s » : %s.',
+                self::LIBELLES[$d->statut] ?? $d->statut, $refus
             ));
         }
     }
@@ -436,5 +475,11 @@ class DepenseService
     private function ar(float $montant): string
     {
         return number_format($montant, 0, ',', ' ');
+    }
+
+    /** Comme ar(), en gardant les centimes s'il y en a (montants saisis avec décimales). */
+    private function ar2(float $montant): string
+    {
+        return floor($montant) == $montant ? $this->ar($montant) : number_format($montant, 2, ',', ' ');
     }
 }

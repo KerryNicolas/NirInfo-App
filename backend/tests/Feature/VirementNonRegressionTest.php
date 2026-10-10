@@ -78,6 +78,25 @@ class VirementNonRegressionTest extends TestCase
         $this->assertSame($avant, DB::table('transfer')->count());
     }
 
+    public function test_un_compte_reference_seulement_par_un_virement_ne_se_supprime_pas(): void
+    {
+        $this->virer($this->a, $this->b, 3000);
+
+        // Les virements ne sont pas écrits au journal : ces deux comptes ont
+        // un journal VIDE, et pourtant ils sont utilisés.
+        $this->assertSame(0, DB::table('transaction')->whereIn('account', [$this->a, $this->b])->count());
+
+        foreach ([$this->a, $this->b] as $compte) {
+            $this->deleteJson("/api/comptes-budget/{$compte}")
+                ->assertStatus(422)->assertJsonPath('message', 'Ce compte est utilisé par des opérations financières : il ne peut pas être supprimé.');
+            $this->assertSame(1, DB::table('compte')->where('id_compte', $compte)->count());
+        }
+
+        // Le troisième compte n'a ni écriture ni virement : il se supprime.
+        $this->deleteJson("/api/comptes-budget/{$this->c}")->assertStatus(200);
+        $this->assertSame(0, DB::table('compte')->where('id_compte', $this->c)->count());
+    }
+
     public function test_les_vrais_comptes_ne_sont_pas_touches(): void
     {
         $tests = [$this->a, $this->b, $this->c];
