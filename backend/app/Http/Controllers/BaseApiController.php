@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\TresorerieService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -131,24 +132,9 @@ abstract class BaseApiController extends Controller
      */
     protected function ajusterSoldeCompte(int $idCompte, float $montant, string $sens, string $raison): void
     {
-        if ($sens === 'E') {
-            DB::table('compte')->where('id_compte', $idCompte)->increment('montant', $montant);
-        } else {
-            DB::table('compte')->where('id_compte', $idCompte)->decrement('montant', $montant);
-        }
-        $idTransaction = DB::table('transaction')->insertGetId([
-            'transaction_type' => $sens,
-            'amount'           => $montant,
-            'reson'            => $raison,
-            'account'          => $idCompte,
-            'date_transaction' => now()->toDateString(),
-        ]);
-        DB::table('gestion_compte')->insert([
-            'id_compte'      => $idCompte,
-            'type'           => $sens,
-            'montant'        => $montant,
-            'date_gestion'   => now()->toDateString(),
-            'id_transaction' => $idTransaction,
-        ]);
+        // La logique vit désormais dans TresorerieService (mêmes écritures,
+        // plus un verrou sur le compte). Signature inchangée : les
+        // contrôleurs qui appellent cette méthode n'ont pas à être modifiés.
+        app(TresorerieService::class)->mouvement($idCompte, $montant, $sens, $raison);
     }
 }
