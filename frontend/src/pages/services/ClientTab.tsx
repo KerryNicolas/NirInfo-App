@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { useAuth } from '../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../components/icons'
 import { isValidContact, formatContact, invalidFieldStyle } from '../../utils/validators'
 
@@ -11,6 +12,7 @@ interface Client { id_client: number; client_name: string; client_contact: strin
 const EMPTY = { client_name: '', client_contact: '', client_adresse: '' }
 
 export default function ClientTab() {
+  const { isAdmin } = useAuth()
   const table   = useTable<Client>('/clients', { perPage: 15 })
   const [editing, setEditing] = useState<Client | null>(null)
   const [form,    setForm]    = useState(EMPTY)
@@ -117,7 +119,7 @@ export default function ClientTab() {
                     <td style={{ fontSize:12, color:'#64748b' }}>{c.client_adresse || '—'}</td>
                     <td><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(c)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(c.id_client)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(c.id_client)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

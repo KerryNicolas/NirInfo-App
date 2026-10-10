@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { useAuth } from '../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX, IcoInfo } from '../../components/icons'
 import { formatNumeroCompte, isValidNumeroCompte, invalidFieldStyle } from '../../utils/validators'
 
@@ -27,6 +28,7 @@ function EditeurPopover({ editeur, onClose }: { editeur: string; onClose: () => 
 const fmt = (n: number) => Number(n).toLocaleString('fr')
 
 export default function CompteTab() {
+  const { isAdmin } = useAuth()
   const table   = useTable<Compte>('/comptes-budget', { perPage: 15 })
   const [editing, setEditing] = useState<Compte | null>(null)
   const [form,    setForm]    = useState(EMPTY)
@@ -131,7 +133,7 @@ export default function CompteTab() {
                     <td><div className="table-actions">
                       <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(c.editeur)}><IcoInfo /></button>
                       <button className="btn-icon edit" onClick={() => handleEdit(c)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(c.id_compte)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(c.id_compte)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { useAuth } from '../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../components/icons'
 import { formatMontantInput, parseMontantInput } from '../../utils/validators'
 
@@ -49,6 +50,7 @@ function DetailModal({ r, onClose }: { r: Recouvrement; onClose: () => void }) {
 }
 
 export default function RecouvrementPrestationTab() {
+  const { isAdmin } = useAuth()
   const table = useTable<Recouvrement>('/recouvrements-prestation', { perPage: 15 })
   const [clients,  setClients]  = useState<Client[]>([])
   const [services, setServices] = useState<ServiceItem[]>([])
@@ -226,7 +228,7 @@ export default function RecouvrementPrestationTab() {
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       {/* FIX : bouton Modifier ajouté — manquait totalement */}
                       <button className="btn-icon edit" onClick={() => handleEdit(r)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(r.id_prestation)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(r.id_prestation)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

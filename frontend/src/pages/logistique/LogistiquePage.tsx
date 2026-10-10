@@ -5,6 +5,7 @@ import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import Sidebar from '../../components/Sidebar'
+import { useAuth } from '../../contexts/AuthContext'
 import { IcoCart, IcoCharge, IcoEdit, IcoPlus, IcoSave, IcoTrash, IcoX, IcoExport } from '../../components/icons'
 import { formatMontantInput, parseMontantInput } from '../../utils/validators'
 
@@ -53,6 +54,7 @@ function DetailModal({ title, rows, onClose }: { title: string; rows: [string, s
 }
 
 export default function LogistiquePage() {
+  const { isAdmin } = useAuth()
   const [tab, setTab] = useState<Tab>('achat')
 
   const achatTable  = useTable<Achat>('/achats',  { perPage: 15 })
@@ -328,7 +330,7 @@ export default function LogistiquePage() {
                             <td style={{ fontSize:12, color:'#64748b' }}>{String(a.date_achat).slice(0,10)}</td>
                             <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                               <button className="btn-icon edit" onClick={() => editAchat(a)}><IcoEdit /></button>
-                              <button className="btn-icon delete" onClick={() => askDeleteAchat(a)}><IcoTrash /></button>
+                              {isAdmin() && <button className="btn-icon delete" onClick={() => askDeleteAchat(a)}><IcoTrash /></button>}
                             </div></td>
                           </tr>
                         ))
@@ -438,7 +440,7 @@ export default function LogistiquePage() {
                             <td style={{ fontSize:12, color:'#64748b' }}>{String(c.date).slice(0,10)}</td>
                             <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                               <button className="btn-icon edit" onClick={() => editCharge(c)}><IcoEdit /></button>
-                              <button className="btn-icon delete" onClick={() => askDeleteCharge(c)}><IcoTrash /></button>
+                              {isAdmin() && <button className="btn-icon delete" onClick={() => askDeleteCharge(c)}><IcoTrash /></button>}
                             </div></td>
                           </tr>
                         ))

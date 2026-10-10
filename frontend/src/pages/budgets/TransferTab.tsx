@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { useAuth } from '../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoSave, IcoTrash, IcoSearch, IcoX } from '../../components/icons'
 import { formatMontantInput, parseMontantInput } from '../../utils/validators'
 
@@ -17,6 +18,7 @@ const EMPTY = { starting_account: '', destination_account: '', amount: '' }
 const fmt = (n: number) => Number(n).toLocaleString('fr')
 
 export default function TransferTab() {
+  const { isAdmin } = useAuth()
   const table = useTable<Transfer>('/transferts', { perPage: 15 })
   const [comptes, setComptes] = useState<Compte[]>([])
   const [form,    setForm]    = useState(EMPTY)
@@ -140,7 +142,7 @@ export default function TransferTab() {
                     <td style={{ fontWeight:600, color:'#2563eb' }}>{fmt(t.amount)} Ar</td>
                     <td><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(t)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(t.id_transfer)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(t.id_transfer)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

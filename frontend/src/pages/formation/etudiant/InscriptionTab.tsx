@@ -7,6 +7,7 @@ import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
 import FactureInvoice, { FactureData } from '../../../components/FactureInvoice'
 import ConfirmDialog from '../../../components/ConfirmDialog'
+import { useAuth } from '../../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../../components/icons'
 import { formatMontantInput, parseMontantInput, isValidMatriculeNI, invalidFieldStyle } from '../../../utils/validators'
 
@@ -63,6 +64,7 @@ export default function InscriptionTab({ prefillMatricule, onPrefillConsumed }: 
   prefillMatricule?: string | null
   onPrefillConsumed?: () => void
 } = {}) {
+  const { isAdmin } = useAuth()
   const table    = useTable<Inscription>('/inscriptions', { perPage: 15 })
   const [comptes,  setComptes]  = useState<Compte[]>([])
   const [form,     setForm]     = useState(EMPTY_I)
@@ -309,7 +311,7 @@ export default function InscriptionTab({ prefillMatricule, onPrefillConsumed }: 
                     <td style={{ fontSize:11, color:'#2563eb', fontWeight:600 }}>{i.ref_facture || '—'}</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(i)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(i.id_paiement)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(i.id_paiement)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

@@ -8,6 +8,7 @@ import Pagination from '../../../components/Pagination'
 import TableSkeleton from '../../../components/TableSkeleton'
 import Avatar from '../../../assets/avatar.jpg'
 import ConfirmDialog from '../../../components/ConfirmDialog'
+import { useAuth } from '../../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoCameraModern, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../../components/icons'
 
 interface Etudiant {
@@ -69,6 +70,7 @@ interface EtudiantTabProps {
 }
 
 export default function EtudiantTab({ onInscrire }: EtudiantTabProps) {
+  const { isAdmin } = useAuth()
   const table = useTable<Etudiant>('/etudiants', { perPage: 15 })
 
   const [editing,      setEditing]      = useState<Etudiant | null>(null)
@@ -442,9 +444,11 @@ export default function EtudiantTab({ onInscrire }: EtudiantTabProps) {
                         <button className="btn-icon edit" onClick={() => handleEdit(e)} title="Modifier">
                           <IcoEdit />
                         </button>
-                        <button className="btn-icon delete" onClick={() => setConfirmDeleteMat(e.matricule)} title="Supprimer">
-                          <IcoTrash />
-                        </button>
+                        {isAdmin() && (
+                          <button className="btn-icon delete" onClick={() => setConfirmDeleteMat(e.matricule)} title="Supprimer">
+                            <IcoTrash />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

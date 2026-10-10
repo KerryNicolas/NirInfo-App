@@ -24,7 +24,7 @@ const EMPTY = { matricule:'', code_module:'', date_debut:'', date_fin:'', nom_fo
 // onEditManuel : fourni par CertificationPage uniquement pour l'admin. Il
 // ouvre l'onglet « Saisie manuelle » avec le certificat à corriger.
 export default function CertificationAuto({ onEditManuel }: { onEditManuel?: (c: Certification) => void }) {
-  const { hasPermission } = useAuth()
+  const { hasPermission, isAdmin } = useAuth()
   const canValider = hasPermission('certifications.valider')
 
   const [form, setForm]       = useState(EMPTY)
@@ -330,7 +330,7 @@ export default function CertificationAuto({ onEditManuel }: { onEditManuel?: (c:
                         )}
                         {/* Un certificat validé ne se supprime plus (le serveur
                             le refuse aussi). */}
-                        {!isValide(c.accept) && (
+                        {isAdmin() && !isValide(c.accept) && (
                           <button className="btn-icon delete" onClick={() => setConfirmDeleteRef(c.reference)} title="Supprimer"><IcoTrash /></button>
                         )}
                       </div></td>

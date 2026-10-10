@@ -4,12 +4,14 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { useAuth } from '../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../components/icons'
 
 interface ServiceItem { id_services: number; service_name: string }
 const EMPTY = { service_name: '' }
 
 export default function ServiceCatalogTab() {
+  const { isAdmin } = useAuth()
   const table   = useTable<ServiceItem>('/services', { perPage: 15 })
   const [editing, setEditing] = useState<ServiceItem | null>(null)
   const [form,    setForm]    = useState(EMPTY)
@@ -87,7 +89,7 @@ export default function ServiceCatalogTab() {
                     <td style={{ fontWeight:600 }}>{s.service_name}</td>
                     <td><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(s)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(s.id_services)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(s.id_services)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

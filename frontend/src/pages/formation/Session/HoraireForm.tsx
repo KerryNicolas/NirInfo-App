@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
 import ConfirmDialog from '../../../components/ConfirmDialog'
+import { useAuth } from '../../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX, IcoInfo } from '../../../components/icons'
 
 interface Horaire { code_horaire: string; designation: string; horaire: string; remarque: string; editeur: string }
@@ -25,6 +26,7 @@ function EditeurPopover({ editeur, onClose }: { editeur: string; onClose: () => 
 }
 
 export default function HoraireForm() {
+  const { isAdmin } = useAuth()
   const table   = useTable<Horaire>('/horaires', { perPage: 15 })
   const [editing, setEditing] = useState<Horaire | null>(null)
   const [form,    setForm]    = useState(EMPTY)
@@ -128,7 +130,7 @@ export default function HoraireForm() {
                     <td><div className="table-actions">
                       <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(h.editeur)}><IcoInfo /></button>
                       <button className="btn-icon edit" onClick={() => handleEdit(h)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(h.code_horaire)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(h.code_horaire)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

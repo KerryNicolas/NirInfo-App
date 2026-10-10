@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { useAuth } from '../../contexts/AuthContext'
 import { IcoEdit, IcoPlus, IcoSearch, IcoSave, IcoX, IcoTrash } from '../../components/icons'
 
 export interface Fonction {
@@ -48,6 +49,7 @@ function DetailModalFonction({ f, onClose }: { f: Fonction; onClose: () => void 
 }
 
 export default function FonctionTab() {
+  const { isAdmin } = useAuth()
   const fonctionTable = useTable<Fonction>('/fonctions', { perPage: 15 })
 
   const [formF,    setFormF]    = useState(EMPTY_F)
@@ -128,7 +130,7 @@ export default function FonctionTab() {
                     <td style={{ fontSize:12, color:'#64748b' }}>{f.description_fonction || '—'}</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => { setEditF(f); setFormF({ nom_fonction:f.nom_fonction, description_fonction:f.description_fonction??'' }); window.scrollTo({top:0,behavior:'smooth'}) }}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteFonctionId(f.id_fonction)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteFonctionId(f.id_fonction)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

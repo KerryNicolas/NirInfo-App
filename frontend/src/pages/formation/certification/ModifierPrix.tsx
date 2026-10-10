@@ -3,12 +3,14 @@ import api from '../../../api/axios'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import { formatMontantInput, parseMontantInput } from '../../../utils/validators'
+import { useAuth } from '../../../contexts/AuthContext'
 import { IcoMoney, IcoTrash } from '../../../components/icons'
 import { prixToInput, fmtMontant, fmtDateCourt } from './types'
 import type { PrixHistorique } from './types'
 
 // Onglet « Modifier prix » — réservé à l'admin (filtré dans CertificationTab).
 export default function ModifierPrix() {
+  const { isAdmin } = useAuth()
   const [prixActuel, setPrixActuel] = useState<number>(0)
   const [historique, setHistorique] = useState<PrixHistorique[]>([])
   const [newPrix, setNewPrix]       = useState<string>('')
@@ -105,7 +107,7 @@ export default function ModifierPrix() {
                       <td>{fmtMontant(p.prix)} Ar</td>
                       <td>{fmtDateCourt(p.date_modification)}</td>
                       <td><div className="table-actions">
-                        <button className="btn-icon delete" onClick={() => setConfirmDeleteId(p.id_prix_certificat)} title="Supprimer"><IcoTrash /></button>
+                        {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(p.id_prix_certificat)} title="Supprimer"><IcoTrash /></button>}
                       </div></td>
                     </tr>
                   ))

@@ -36,7 +36,8 @@ Route::middleware('throttle:3,60')->group(function () {
 });
 
 // ── Routes protégées ──
-Route::middleware('auth:sanctum')->group(function () {
+// admin.delete : toute suppression (DELETE) est réservée au rôle admin.
+Route::middleware(['auth:sanctum', 'admin.delete'])->group(function () {
 
     // Auth
     Route::get ('/user',    [AuthController::class, 'me']);

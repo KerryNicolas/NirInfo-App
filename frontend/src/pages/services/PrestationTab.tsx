@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { useAuth } from '../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../components/icons'
 import { formatMontantInput, parseMontantInput } from '../../utils/validators'
 
@@ -49,6 +50,7 @@ function DetailModal({ p, onClose }: { p: Prestation; onClose: () => void }) {
 }
 
 export default function PrestationTab() {
+  const { isAdmin } = useAuth()
   const table = useTable<Prestation>('/prestations', { perPage: 15 })
   const [clients,  setClients]  = useState<Client[]>([])
   const [services, setServices] = useState<ServiceItem[]>([])
@@ -224,7 +226,7 @@ export default function PrestationTab() {
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       {/* FIX : bouton Modifier ajouté — manquait totalement */}
                       <button className="btn-icon edit" onClick={() => handleEdit(p)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(p.id_prestation)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(p.id_prestation)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

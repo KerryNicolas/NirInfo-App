@@ -5,6 +5,7 @@ import { useTable } from '../../../hooks/useTable'
 import { useModuleSuggestions } from '../../../hooks/useModuleSuggestions'
 import Pagination from '../../../components/Pagination'
 import ConfirmDialog from '../../../components/ConfirmDialog'
+import { useAuth } from '../../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../../components/icons'
 import { formatMontantInput, parseMontantInput } from '../../../utils/validators'
 
@@ -28,6 +29,7 @@ const DEFAULT_HORAIRES: Horaire[] = [
 ]
 
 export default function SessionForm() {
+  const { isAdmin } = useAuth()
   const table    = useTable<Session>('/sessions', { perPage: 15 })
   const [horaires, setHoraires] = useState<Horaire[]>([])
   const [form,     setForm]     = useState(EMPTY)
@@ -244,7 +246,7 @@ export default function SessionForm() {
                     <td style={{ fontSize:12 }}>{s.lieu ? <span style={{ textTransform:'capitalize' }}>{s.lieu}</span> : <span style={{ color:'#cbd5e1' }}>—</span>}</td>
                     <td><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(s)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(s.code_session)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(s.code_session)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

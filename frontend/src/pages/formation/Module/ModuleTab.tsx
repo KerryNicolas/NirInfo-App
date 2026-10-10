@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
 import ConfirmDialog from '../../../components/ConfirmDialog'
+import { useAuth } from '../../../contexts/AuthContext'
 import { IcoEdit, IcoTrash, IcoSearch, IcoClock, IcoInfo, IcoX } from '../../../components/icons'
 import ModuleForm from './ModuleForm'
 
@@ -27,6 +28,7 @@ function EditeurPopover({ editeur, onClose }: { editeur: string; onClose: () => 
 }
 
 export default function ModuleTab() {
+  const { isAdmin } = useAuth()
   const table   = useTable<Module>('/modules', { perPage: 15 })
   const [editing, setEditing] = useState<Module | null>(null)
   const [form,    setForm]    = useState(EMPTY)
@@ -145,7 +147,7 @@ export default function ModuleTab() {
                         <div className="table-actions">
                           <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(m.editeur)}><IcoInfo /></button>
                           <button className="btn-icon edit" onClick={() => handleEdit(m)}><IcoEdit /></button>
-                          <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(m.code_module)}><IcoTrash /></button>
+                          {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(m.code_module)}><IcoTrash /></button>}
                         </div>
                       </td>
                     </tr>

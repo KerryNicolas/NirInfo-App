@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { useAuth } from '../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoInfo, IcoSave, IcoX } from '../../components/icons'
 import { formatMontantInput, parseMontantInput } from '../../utils/validators'
 
@@ -31,6 +32,7 @@ function EditeurPopover({ editeur, onClose }: { editeur: string; onClose: () => 
 }
 
 export default function GererTab() {
+  const { isAdmin } = useAuth()
   const table = useTable<Gestion>('/gerer', { perPage: 15 })
   const [comptes, setComptes] = useState<Compte[]>([])
   const [form,    setForm]    = useState(EMPTY)
@@ -152,7 +154,7 @@ export default function GererTab() {
                     <td><div className="table-actions">
                       <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(g.editeur)}><IcoInfo /></button>
                       <button className="btn-icon edit" onClick={() => handleEdit(g)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(g.id_transaction)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(g.id_transaction)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

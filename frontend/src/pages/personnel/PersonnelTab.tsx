@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import { useAuth } from '../../contexts/AuthContext'
 import { IcoEdit, IcoPlus, IcoSearch, IcoCamera, IcoSave, IcoX, IcoExport, IcoTrash } from '../../components/icons'
 import { toUpperName, toTitleCaseWords, formatTelephoneMG, isValidTelephoneMG, formatCinMG, isValidCinMG, isValidEmailComFr, isAdult18, formatMontantInput, parseMontantInput, invalidFieldStyle } from '../../utils/validators'
 
@@ -72,6 +73,7 @@ function DetailModal({ p, onClose }: { p: Personnel; onClose: () => void }) {
 }
 
 export default function PersonnelTab() {
+  const { isAdmin } = useAuth()
   const fmt = fmtM
   const personnelTable = useTable<Personnel>('/personnel', { perPage: 15 })
 
@@ -300,7 +302,7 @@ export default function PersonnelTab() {
                     <td style={{ fontWeight:600, color:'#16a34a' }}>{fmt(p.salaire_pers)} Ar</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => startEditPersonnel(p)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeletePersMat(p.matricule_pers)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeletePersMat(p.matricule_pers)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}

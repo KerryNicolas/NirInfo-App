@@ -7,6 +7,7 @@ import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
 import FactureInvoice, { FactureData } from '../../../components/FactureInvoice'
 import ConfirmDialog from '../../../components/ConfirmDialog'
+import { useAuth } from '../../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../../components/icons'
 import { formatMontantInput, parseMontantInput, isValidMatriculeNI, invalidFieldStyle } from '../../../utils/validators'
 
@@ -60,6 +61,7 @@ function DetailModal({ r, onClose }: { r: Recouvrement; onClose: () => void }) {
 }
 
 export default function RecouvrementTab() {
+  const { isAdmin } = useAuth()
   const table    = useTable<Recouvrement>('/recouvrements', { perPage: 15 })
   const [comptes,  setComptes]  = useState<Compte[]>([])
   const [form,     setForm]     = useState(EMPTY_R)
@@ -298,7 +300,7 @@ export default function RecouvrementTab() {
                     <td style={{ fontSize:12 }}>{r.date_paiement}</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(r)}><IcoEdit /></button>
-                      <button className="btn-icon delete" onClick={() => setConfirmDeleteId(r.id_recouvrement)}><IcoTrash /></button>
+                      {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(r.id_recouvrement)}><IcoTrash /></button>}
                     </div></td>
                   </tr>
                 ))}
