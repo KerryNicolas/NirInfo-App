@@ -26,6 +26,10 @@ class RolePermissionSeeder extends Seeder
             'certifications.valider'     => 'Confirmer/valider une certification',
             'certifications.prix.manage' => 'Modifier le prix standard des certificats',
             'users.manage'               => 'Gérer les comptes utilisateurs',
+            // Suivi des dépenses — mêmes libellés que la migration
+            // 2026_10_12_000001_add_depenses_permissions (admin uniquement).
+            'depenses.valider'           => 'Valider une dépense (achat ou charge)',
+            'depenses.payer'             => 'Payer une dépense ou annuler son paiement',
         ];
 
         foreach ($permissions as $slug => $name) {

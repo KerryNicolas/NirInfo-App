@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Services\DepenseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -62,6 +63,14 @@ class CompteController extends BaseApiController
 
     public function destroy($id)
     {
+        // FIX : avec le suivi des dépenses, un compte encore utilisé par une
+        // opération financière (écriture du journal, dépense, virement) ne se
+        // supprime plus : ses écritures resteraient sans compte. Sans effet si
+        // le suivi est désactivé.
+        if (DepenseService::actif() && app(DepenseService::class)->compteUtilise((int) $id)) {
+            return $this->err('Ce compte est utilisé par des opérations financières : il ne peut pas être supprimé.', 422);
+        }
+
         DB::table('compte')->where('id_compte', $id)->delete();
         return $this->ok('Compte supprimé avec succès');
     }

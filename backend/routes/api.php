@@ -128,6 +128,24 @@ Route::middleware(['auth:sanctum', 'admin.delete'])->group(function () {
     Route::put   ('/charges/{id}',         [LogistiqueController::class, 'updateCharge']);
     Route::delete('/charges/{id}',         [LogistiqueController::class, 'destroyCharge']);
 
+    // ── Suivi des dépenses : valider, payer, annuler, historique ──
+    // Actif seulement si DEPENSES_WORKFLOW=true (config/depenses.php) ; sinon
+    // ces routes répondent 409. Aucune route existante n'est modifiée.
+    foreach (['achats' => 'Achat', 'charges' => 'Charge'] as $prefixe => $nom) {
+        Route::post("/{$prefixe}/{id}/valider",          [LogistiqueController::class, "valider{$nom}"])
+            ->middleware('permission:depenses.valider');
+        Route::post("/{$prefixe}/{id}/payer",            [LogistiqueController::class, "payer{$nom}"])
+            ->middleware('permission:depenses.payer');
+        // Annuler un paiement recrédite un compte : même permission que payer.
+        Route::post("/{$prefixe}/{id}/annuler-paiement", [LogistiqueController::class, "annulerPaiement{$nom}"])
+            ->middleware('permission:depenses.payer');
+        // Annuler une dépense non payée : l'admin, ou l'auteur de la saisie (contrôlé dans DepenseService).
+        Route::post("/{$prefixe}/{id}/annuler",          [LogistiqueController::class, "annuler{$nom}"])
+            ->middleware('permission:logistique.access');
+        Route::get ("/{$prefixe}/{id}/historique",       [LogistiqueController::class, "historique{$nom}"])
+            ->middleware('permission:logistique.access');
+    }
+
     Route::get   ('/autres-depenses',      [LogistiqueController::class, 'indexAutre']);
     Route::post  ('/autres-depenses',      [LogistiqueController::class, 'storeAutre']);
     Route::delete('/autres-depenses/{id}', [LogistiqueController::class, 'destroyAutre']);

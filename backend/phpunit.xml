@@ -19,5 +19,9 @@
         <env name="CACHE_DRIVER" value="array" force="true"/>
         <env name="SESSION_DRIVER" value="array" force="true"/>
         <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <!-- Suivi des dépenses activé pour les tests (la base de test est
+             migrée). DepenseDesactiveTest le coupe pour vérifier l'ancien
+             comportement. -->
+        <env name="DEPENSES_WORKFLOW" value="true" force="true"/>
     </php>
 </phpunit>

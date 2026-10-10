@@ -1,11 +1,26 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Services\DepenseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class GererController extends BaseApiController
 {
+    // FIX : cet écran modifie et supprime une écriture du journal par son
+    // numéro. Avec le suivi des dépenses, une écriture rattachée à un achat ou
+    // à une charge (paiement, écriture inverse, sortie de l'ancien système) ne
+    // doit plus pouvoir l'être ici : elle ne se corrige que par l'annulation
+    // du paiement, qui laisse une trace. Sans effet si le suivi est désactivé.
+    private function refusSiEcritureDeDepense(object $transaction)
+    {
+        if (DepenseService::actif() && app(DepenseService::class)->ecritureProtegee($transaction)) {
+            return $this->err("Cette écriture est rattachée à une dépense : elle ne peut être ni modifiée ni supprimée ici. Annulez le paiement depuis la dépense.", 422);
+        }
+
+        return null;
+    }
+
     // ─── Liste des transactions manuelles (dépôts/retraits), en excluant celles
     // générées automatiquement par les autres modules (inscription, recouvrement,
     // charge, achat, prestation) — même logique que TransactionModel::getAll() en CI ──
@@ -91,6 +106,7 @@ class GererController extends BaseApiController
         if (!$original) {
             return $this->err('Opération non trouvée', 404);
         }
+        if ($refus = $this->refusSiEcritureDeDepense($original)) return $refus;
 
         DB::beginTransaction();
         try {
@@ -147,6 +163,7 @@ class GererController extends BaseApiController
         if (!$original) {
             return $this->err('Opération non trouvée', 404);
         }
+        if ($refus = $this->refusSiEcritureDeDepense($original)) return $refus;
 
         DB::beginTransaction();
         try {
