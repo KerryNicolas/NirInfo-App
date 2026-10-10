@@ -8,6 +8,11 @@ backend/storage/framework/views/
 backend/storage/logs/
 backend/bootstrap/cache/
 !backend/storage/app/public/photos/.gitkeep
+# Fichier généré par PHPUnit à chaque exécution des tests
+backend/.phpunit.result.cache
+# Photos du personnel envoyées depuis l'application (pas du code)
+backend/storage/app/public/personnels/
+backend/public/storage/personnels/*
 
 # Frontend
 frontend/node_modules/

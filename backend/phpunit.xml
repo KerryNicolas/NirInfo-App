@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true">
+    <testsuites>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <!-- Les tests ne tournent JAMAIS sur la base réelle : force="true"
+             écrase la valeur du .env. tests/CreatesApplication.php refuse en
+             plus de démarrer si le nom de la base ne finit pas par "_test". -->
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="DB_DATABASE" value="gestion_formation1_test" force="true"/>
+        <!-- Aucun email réel pendant les tests -->
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="CACHE_DRIVER" value="array" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+    </php>
+</phpunit>
