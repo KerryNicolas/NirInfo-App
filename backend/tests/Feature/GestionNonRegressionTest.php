@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\TresorerieService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Tests\TestCase;
 
 // Non-régression des opérations manuelles de l'onglet Gestion (GererController) :
@@ -134,6 +137,129 @@ class GestionNonRegressionTest extends TestCase
         $this->deleteJson("/api/gerer/{$id}")->assertStatus(200);
         $this->deleteJson("/api/comptes-budget/{$this->compte}")->assertStatus(200);
         $this->assertSame(0, DB::table('compte')->where('id_compte', $this->compte)->count());
+    }
+
+    /* ── Contrôles sous verrou : aucun compte ne devient négatif par la Gestion ── */
+
+    public function test_supprimer_un_depot_dont_l_argent_a_ete_depense_est_refuse(): void
+    {
+        $depot = $this->operation('E', 5000);     // solde 15 000
+        $this->operation('S', 14000);             // solde 1 000 : l'argent du dépôt a été dépensé
+
+        $this->deleteJson("/api/gerer/{$depot}")
+            ->assertStatus(422)->assertJsonPath('message', 'Solde insuffisant : supprimer cette opération rendrait le compte négatif.');
+
+        $this->assertSame(1000.0, $this->solde());
+        $this->assertSame(1, DB::table('transaction')->where('id_transaction', $depot)->count(), "Le dépôt doit rester au journal.");
+    }
+
+    public function test_une_modification_qui_rendrait_le_compte_negatif_est_refusee(): void
+    {
+        $depot = $this->operation('E', 5000);     // solde 15 000
+        $this->operation('S', 14000);             // solde 1 000
+
+        // Ramener le dépôt de 5 000 à 3 000 retirerait 2 000 d'un compte qui n'en a que 1 000.
+        $this->putJson("/api/gerer/{$depot}", ['compte' => $this->compte, 'type' => 'E', 'montant' => 3000, 'raison' => 'TEST'])
+            ->assertStatus(422)->assertJsonPath('message', 'Solde insuffisant pour cette modification');
+        $this->assertSame(1000.0, $this->solde());
+        $this->assertSame(5000, (int) DB::table('transaction')->where('id_transaction', $depot)->value('amount'));
+
+        // L'augmenter, en revanche, est accepté.
+        $this->putJson("/api/gerer/{$depot}", ['compte' => $this->compte, 'type' => 'E', 'montant' => 6000, 'raison' => 'TEST'])->assertStatus(200);
+        $this->assertSame(2000.0, $this->solde());
+    }
+
+    public function test_deplacer_une_operation_vers_un_autre_compte_controle_les_deux_soldes(): void
+    {
+        $autre = DB::table('compte')->insertGetId(['account_number' => 'TEST-G2', 'libelle' => 'TEST GESTION 2', 'montant' => 300], 'id_compte');
+        $retrait = $this->operation('S', 4000);   // solde 6 000
+
+        // Déplacer ce retrait de 4 000 vers un compte qui n'a que 300 : refusé.
+        $this->putJson("/api/gerer/{$retrait}", ['compte' => $autre, 'type' => 'S', 'montant' => 4000, 'raison' => 'TEST'])->assertStatus(422);
+        $this->assertSame([6000.0, 300.0], [$this->solde(), (float) DB::table('compte')->where('id_compte', $autre)->value('montant')]);
+
+        // Vers ce même compte pour 200 : accepté, et le premier compte récupère ses 4 000.
+        $this->putJson("/api/gerer/{$retrait}", ['compte' => $autre, 'type' => 'S', 'montant' => 200, 'raison' => 'TEST'])->assertStatus(200);
+        $this->assertSame([10000.0, 100.0], [$this->solde(), (float) DB::table('compte')->where('id_compte', $autre)->value('montant')]);
+    }
+
+    public function test_le_motif_virement_est_reserve_mais_pas_les_libelles_proches(): void
+    {
+        foreach (['virement', 'VIREMENT', ' Virement '] as $motif) {
+            $this->postJson('/api/gerer', ['compte' => $this->compte, 'type' => 'E', 'montant' => 100, 'raison' => $motif])->assertStatus(422);
+        }
+        foreach (['Transfert Mr', 'Virement bancaire reçu', 'frais de virement'] as $motif) {
+            $this->postJson('/api/gerer', ['compte' => $this->compte, 'type' => 'E', 'montant' => 100, 'raison' => $motif])->assertStatus(201);
+        }
+
+        $this->assertSame(10300.0, $this->solde());
+    }
+
+    public function test_une_operation_qui_ameliore_un_solde_deja_negatif_est_acceptee(): void
+    {
+        $retrait = $this->operation('S', 4000);   // solde 6 000
+        // Solde négatif hérité : rien ne garantit que les soldes réels soient tous positifs.
+        DB::table('compte')->where('id_compte', $this->compte)->update(['montant' => -5000]);
+
+        // L'aggraver reste refusé…
+        $this->postJson('/api/gerer', ['compte' => $this->compte, 'type' => 'S', 'montant' => 1, 'raison' => 'TEST'])
+            ->assertStatus(422)->assertJsonPath('message', 'Solde insuffisant pour ce retrait');
+        $this->assertSame(-5000.0, $this->solde());
+
+        // …mais un dépôt l'améliore sans le rendre positif : accepté.
+        $this->operation('E', 2000);
+        $this->assertSame(-3000.0, $this->solde());
+
+        // Réduire le retrait de 4 000 à 3 500 rend 500 au compte, encore négatif : accepté.
+        $this->putJson("/api/gerer/{$retrait}", ['compte' => $this->compte, 'type' => 'S', 'montant' => 3500, 'raison' => 'TEST'])->assertStatus(200);
+        $this->assertSame(-2500.0, $this->solde());
+
+        // Supprimer le retrait rend 3 500 au compte : accepté.
+        $this->deleteJson("/api/gerer/{$retrait}")->assertStatus(200);
+        $this->assertSame(1000.0, $this->solde());
+    }
+
+    /* ── Erreur inattendue : message en français, aucun détail technique au navigateur ── */
+
+    public function test_une_erreur_inattendue_donne_un_message_francais_sans_detail_technique(): void
+    {
+        $id = $this->operation('E', 2500);          // solde 12 500
+        $journal = DB::table('transaction')->count();
+
+        // Même en mode débogage, rien de technique ne doit sortir.
+        config(['app.debug' => true]);
+        Log::spy();
+        $this->app->bind(TresorerieService::class, fn () => new class extends TresorerieService {
+            public function verrouillerComptes(array $ids): array
+            {
+                throw new RuntimeException('SQLSTATE[HY000] détail interne confidentiel');
+            }
+        });
+
+        $corps = ['compte' => $this->compte, 'type' => 'E', 'montant' => 100, 'raison' => 'TEST panne'];
+        $appels = [
+            "Erreur lors de l'enregistrement" => fn () => $this->postJson('/api/gerer', $corps),
+            'Erreur lors de la mise à jour'   => fn () => $this->putJson("/api/gerer/{$id}", $corps),
+            'Erreur lors de la suppression'   => fn () => $this->deleteJson("/api/gerer/{$id}"),
+        ];
+
+        foreach ($appels as $message => $appel) {
+            $reponse = $appel();
+            $reponse->assertStatus(500)->assertExactJson(['message' => $message]);
+            $this->assertStringNotContainsString('SQLSTATE', $reponse->getContent());
+            $this->assertStringNotContainsString('confidentiel', $reponse->getContent());
+        }
+
+        // Le détail est dans le journal du serveur, une fois par erreur.
+        Log::shouldHaveReceived('error')->times(3)->withArgs(
+            fn ($message, $contexte) => ($contexte['exception'] ?? null) instanceof RuntimeException
+                && str_contains($contexte['exception']->getMessage(), 'confidentiel')
+        );
+
+        // Et rien n'a été écrit.
+        $this->assertSame(12500.0, $this->solde());
+        $this->assertSame($journal, DB::table('transaction')->count());
+        $this->assertSame(2500, (int) DB::table('transaction')->where('id_transaction', $id)->value('amount'));
     }
 
     public function test_la_suppression_d_une_operation_retablit_le_solde(): void

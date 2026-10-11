@@ -170,6 +170,16 @@ class DepenseDesactiveTest extends TestCase
 
         $this->putJson("/api/gerer/{$manuelle}", ['compte' => $compte, 'type' => 'E', 'montant' => 600, 'raison' => 'TEST modifiée'])->assertStatus(200);
         $this->deleteJson("/api/gerer/{$manuelle}")->assertStatus(200);
+        $this->postJson('/api/gerer', ['compte' => $compte, 'type' => 'S', 'montant' => 100, 'raison' => 'TEST retrait'])->assertStatus(201);
+
+        // Virements : création, modification, suppression — sans écriture au journal dans ce mode.
+        $journal = DB::table('transaction')->count();
+        $this->postJson('/api/transferts', ['starting_account' => $compte, 'destination_account' => $inconnu, 'amount' => 300])->assertStatus(201);
+        $virement = (int) DB::table('transfer')->max('id_transfer');
+        $this->putJson("/api/transferts/{$virement}", ['starting_account' => $compte, 'destination_account' => $inconnu, 'amount' => 200])->assertStatus(200);
+        $this->deleteJson("/api/transferts/{$virement}")->assertStatus(200);
+        $this->assertSame($journal, DB::table('transaction')->count(), 'Suivi désactivé : un virement ne doit rien écrire au journal.');
+
         $this->deleteJson("/api/comptes-budget/{$inconnu}")->assertStatus(200);
 
         $requetes = array_column(DB::getQueryLog(), 'query');

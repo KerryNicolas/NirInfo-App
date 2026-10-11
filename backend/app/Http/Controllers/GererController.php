@@ -2,20 +2,23 @@
 namespace App\Http\Controllers;
 
 use App\Services\DepenseService;
+use App\Services\TresorerieService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class GererController extends BaseApiController
 {
     // FIX : cet écran modifie et supprime une écriture du journal par son
-    // numéro. Avec le suivi des dépenses, une écriture rattachée à un achat ou
-    // à une charge (paiement, écriture inverse, sortie de l'ancien système) ne
-    // doit plus pouvoir l'être ici : elle ne se corrige que par l'annulation
-    // du paiement, qui laisse une trace. Sans effet si le suivi est désactivé.
-    private function refusSiEcritureDeDepense(object $transaction)
+    // numéro. Avec le suivi de trésorerie, une écriture générée par
+    // l'application et tracée — paiement d'une dépense, écriture d'un
+    // virement, écriture inverse, sortie d'une dépense de l'ancien système —
+    // ne doit plus pouvoir l'être ici : elle ne se corrige que depuis la
+    // dépense ou le virement, par une compensation qui laisse une trace.
+    // Sans effet si le suivi est désactivé.
+    private function refusSiEcritureProtegee(object $transaction)
     {
         if (DepenseService::actif() && app(DepenseService::class)->ecritureProtegee($transaction)) {
-            return $this->err("Cette écriture est rattachée à une dépense : elle ne peut être ni modifiée ni supprimée ici. Annulez le paiement depuis la dépense.", 422);
+            return $this->err("Cette écriture est rattachée à une dépense ou à un virement : elle ne peut être ni modifiée ni supprimée ici. Annulez l'opération depuis la dépense ou le virement.", 422);
         }
 
         return null;
@@ -29,7 +32,9 @@ class GererController extends BaseApiController
     // ainsi que la base compare ces textes). Correspondance EXACTE pour les
     // motifs simples : « Achat de balais » ou « Paiement salaire » restent
     // des motifs libres parfaitement valables.
-    private const MOTIFS_RESERVES = ['inscription', 'recouvrement', 'achat', 'charge', 'prestation', 'recouvrement_prestation', 'certificat'];
+    // « virement » : motif des écritures de virement (TresorerieService::MOTIF_VIREMENT).
+    // « Transfert Mr » et autres libellés libres restent permis.
+    private const MOTIFS_RESERVES = ['inscription', 'recouvrement', 'achat', 'charge', 'prestation', 'recouvrement_prestation', 'certificat', TresorerieService::MOTIF_VIREMENT];
     private const PREFIXES_RESERVES = [
         'certification ', 'correction inscription #', 'correction recouvrement #',
         'suppression inscription #', 'suppression recouvrement #',
@@ -54,7 +59,7 @@ class GererController extends BaseApiController
     // charge, achat, prestation) — même logique que TransactionModel::getAll() en CI ──
     public function index(Request $request)
     {
-        $exclus = ['inscription', 'recouvrement', 'charge', 'achat', 'prestation', 'recouvrement_prestation', 'certificat'];
+        $exclus = ['inscription', 'recouvrement', 'charge', 'achat', 'prestation', 'recouvrement_prestation', 'certificat', TresorerieService::MOTIF_VIREMENT];
 
         $query = DB::table('transaction as t')
             ->join('compte as c', 't.account', '=', 'c.id_compte')
@@ -78,6 +83,17 @@ class GererController extends BaseApiController
         );
     }
 
+    // Dépôts et retraits manuels.
+    //
+    // FIX : le solde était vérifié AVANT la transaction et sans verrou — un
+    // retrait lancé en même temps qu'un paiement ou qu'un virement pouvait
+    // rendre le compte négatif. Les trois méthodes ci-dessous verrouillent
+    // maintenant le ou les comptes, puis contrôlent leur existence et l'effet
+    // NET de l'opération sur chaque solde, dans une seule transaction SQL.
+    // TOUJOURS appliqué (aucune colonne du suivi n'est lue).
+    // Une erreur inattendue donne un message en français, sans détail
+    // technique (voir BaseApiController::proteger).
+
     public function store(Request $request)
     {
         $request->validate([
@@ -89,16 +105,16 @@ class GererController extends BaseApiController
 
         if ($refus = $this->refusSiMotifReserve($request->raison)) return $refus;
 
-        // Empêche un retrait supérieur au solde disponible
-        if ($request->type === 'S') {
-            $solde = (float) DB::table('compte')->where('id_compte', $request->compte)->value('montant');
-            if ($request->montant > $solde) {
-                return $this->err('Solde insuffisant pour ce retrait', 422);
-            }
-        }
+        return $this->proteger("Erreur lors de l'enregistrement", fn () => DB::transaction(function () use ($request) {
+            $compte  = (int) $request->compte;
+            $comptes = $this->tresorerie()->verrouillerComptes([$compte]);
+            $this->tresorerie()->exigerComptes($comptes, [$compte]);
+            $this->tresorerie()->refuserDecouvert(
+                $comptes,
+                [$compte => $this->effet($request->type, (float) $request->montant)],
+                [$compte => 'Solde insuffisant pour ce retrait']
+            );
 
-        DB::beginTransaction();
-        try {
             DB::table('transaction')->insert([
                 'transaction_type' => $request->type,
                 'amount'           => $request->montant,
@@ -113,13 +129,8 @@ class GererController extends BaseApiController
                 DB::table('compte')->where('id_compte', $request->compte)->decrement('montant', $request->montant);
             }
 
-            DB::commit();
             return $this->ok('Opération enregistrée avec succès', [], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['message' => 'Erreur lors de l\'enregistrement', 'error' => $e->getMessage()], 500);
-        }
+        }, 3));
     }
 
     // ─── Modification — annule l'effet de l'ancienne opération puis applique la nouvelle ──
@@ -134,14 +145,27 @@ class GererController extends BaseApiController
 
         if ($refus = $this->refusSiMotifReserve($request->raison)) return $refus;
 
-        $original = DB::table('transaction')->where('id_transaction', $id)->first();
-        if (!$original) {
-            return $this->err('Opération non trouvée', 404);
-        }
-        if ($refus = $this->refusSiEcritureDeDepense($original)) return $refus;
+        return $this->proteger('Erreur lors de la mise à jour', fn () => DB::transaction(function () use ($request, $id) {
+            $original = DB::table('transaction')->where('id_transaction', $id)->lockForUpdate()->first();
+            if (!$original) {
+                return $this->err('Opération non trouvée', 404);
+            }
+            if ($refus = $this->refusSiEcritureProtegee($original)) return $refus;
 
-        DB::beginTransaction();
-        try {
+            $ancienCompte = (int) $original->account;
+            $compte       = (int) $request->compte;
+            $comptes      = $this->tresorerie()->verrouillerComptes([$ancienCompte, $compte]);
+            $this->tresorerie()->exigerComptes($comptes, [$compte]);
+
+            // Effet net : l'ancienne opération est annulée, la nouvelle appliquée
+            // (éventuellement sur un autre compte).
+            $variations = [$ancienCompte => -$this->effet($original->transaction_type, (float) $original->amount)];
+            $variations[$compte] = ($variations[$compte] ?? 0) + $this->effet($request->type, (float) $request->montant);
+            $this->tresorerie()->refuserDecouvert($comptes, $variations, [
+                $ancienCompte => 'Solde insuffisant pour cette modification',
+                $compte       => 'Solde insuffisant pour cette modification',
+            ]);
+
             // 1. Annule l'effet de l'ancienne opération sur l'ancien compte
             if ($original->transaction_type === 'E') {
                 DB::table('compte')->where('id_compte', $original->account)->decrement('montant', $original->amount);
@@ -149,23 +173,14 @@ class GererController extends BaseApiController
                 DB::table('compte')->where('id_compte', $original->account)->increment('montant', $original->amount);
             }
 
-            // 2. Vérifie le solde suffisant si la nouvelle opération est un retrait
-            if ($request->type === 'S') {
-                $soldeApresAnnulation = (float) DB::table('compte')->where('id_compte', $request->compte)->value('montant');
-                if ($request->montant > $soldeApresAnnulation) {
-                    DB::rollBack();
-                    return $this->err('Solde insuffisant pour cette modification', 422);
-                }
-            }
-
-            // 3. Applique l'effet de la nouvelle opération (compte éventuellement différent)
+            // 2. Applique l'effet de la nouvelle opération (compte éventuellement différent)
             if ($request->type === 'E') {
                 DB::table('compte')->where('id_compte', $request->compte)->increment('montant', $request->montant);
             } else {
                 DB::table('compte')->where('id_compte', $request->compte)->decrement('montant', $request->montant);
             }
 
-            // 4. Met à jour la ligne de transaction
+            // 3. Met à jour la ligne de transaction
             DB::table('transaction')->where('id_transaction', $id)->update([
                 'transaction_type' => $request->type,
                 'amount'           => $request->montant,
@@ -173,32 +188,30 @@ class GererController extends BaseApiController
                 'account'          => $request->compte,
             ]);
 
-            DB::commit();
             return $this->ok('Opération mise à jour avec succès');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['message' => 'Erreur lors de la mise à jour', 'error' => $e->getMessage()], 500);
-        }
+        }, 3));
     }
 
-    // FIX : la suppression annulait la transaction sans jamais réajuster le
-    // solde du compte concerné — un dépôt supprimé laissait le montant
-    // "gagné" dans le solde, un retrait supprimé laissait le solde amputé
-    // pour rien. On applique ici le même principe que update() : on annule
-    // d'abord l'effet de l'opération sur le compte, puis seulement on
-    // supprime la ligne, le tout dans une transaction DB pour rester
-    // cohérent en cas d'erreur.
+    // La suppression annule d'abord l'effet de l'opération sur le compte, puis
+    // supprime la ligne, dans une transaction. Refusée si elle rendait le
+    // compte négatif : supprimer un dépôt dont l'argent a déjà été dépensé.
     public function destroy($id)
     {
-        $original = DB::table('transaction')->where('id_transaction', $id)->first();
-        if (!$original) {
-            return $this->err('Opération non trouvée', 404);
-        }
-        if ($refus = $this->refusSiEcritureDeDepense($original)) return $refus;
+        return $this->proteger('Erreur lors de la suppression', fn () => DB::transaction(function () use ($id) {
+            $original = DB::table('transaction')->where('id_transaction', $id)->lockForUpdate()->first();
+            if (!$original) {
+                return $this->err('Opération non trouvée', 404);
+            }
+            if ($refus = $this->refusSiEcritureProtegee($original)) return $refus;
 
-        DB::beginTransaction();
-        try {
+            $compte  = (int) $original->account;
+            $comptes = $this->tresorerie()->verrouillerComptes([$compte]);
+            $this->tresorerie()->refuserDecouvert(
+                $comptes,
+                [$compte => -$this->effet($original->transaction_type, (float) $original->amount)],
+                [$compte => 'Solde insuffisant : supprimer cette opération rendrait le compte négatif.']
+            );
+
             // Annule l'effet de l'opération sur le solde du compte :
             // un dépôt (E) avait augmenté le solde -> on le décrémente,
             // un retrait (S) avait diminué le solde -> on l'incrémente.
@@ -210,12 +223,18 @@ class GererController extends BaseApiController
 
             DB::table('transaction')->where('id_transaction', $id)->delete();
 
-            DB::commit();
             return $this->ok('Supprimé avec succès — le solde du compte a été réajusté');
+        }, 3));
+    }
 
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['message' => 'Erreur lors de la suppression', 'error' => $e->getMessage()], 500);
-        }
+    /** Effet d'une opération sur le solde : +montant pour une entrée, -montant pour une sortie. */
+    private function effet(string $type, float $montant): float
+    {
+        return $type === 'E' ? $montant : -$montant;
+    }
+
+    private function tresorerie(): TresorerieService
+    {
+        return app(TresorerieService::class);
     }
 }

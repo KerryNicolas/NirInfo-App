@@ -6,6 +6,10 @@ use App\Services\TresorerieService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 
 /**
  * BaseApiController — supporte à la fois :
@@ -79,6 +83,35 @@ abstract class BaseApiController extends Controller
     protected function err(string $message, int $status = 422): JsonResponse
     {
         return response()->json(['message' => $message], $status);
+    }
+
+    /**
+     * Exécute une opération et, si elle échoue de façon INATTENDUE (panne de
+     * la base, erreur de programmation), répond par un message compréhensible
+     * en français, sans aucun détail technique : le détail (message, fichier,
+     * pile d'appels) est écrit dans le journal du serveur, jamais envoyé au
+     * navigateur.
+     *
+     * Les refus VOULUS ne sont pas touchés : une HttpException (422 « Solde
+     * insuffisant », 404…) ou une erreur de validation ressort telle quelle.
+     * À placer AUTOUR de la transaction SQL, jamais dedans : celle-ci est donc
+     * déjà annulée quand on arrive ici.
+     */
+    protected function proteger(string $messageErreur, callable $operation)
+    {
+        try {
+            return $operation();
+        } catch (HttpExceptionInterface | ValidationException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            Log::error($messageErreur, [
+                'exception' => $e,
+                'route'     => request()->method() . ' ' . request()->path(),
+                'user_id'   => auth()->id(),
+            ]);
+
+            return $this->err($messageErreur, 500);
+        }
     }
 
     /**
