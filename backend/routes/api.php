@@ -21,6 +21,7 @@ use App\Http\Controllers\PrestationController;
 use App\Http\Controllers\CompteController;
 use App\Http\Controllers\GererController;
 use App\Http\Controllers\TransferController;
+use App\Http\Controllers\TresorerieController;
 use App\Http\Controllers\PointageEtudiantController;
 
 // ── Routes publiques — throttle par route (le groupe global 'api' n'a plus de throttle) ──
@@ -201,6 +202,10 @@ Route::middleware(['auth:sanctum', 'admin.delete'])->group(function () {
         // n'était pas joignable, la modification d'un virement échouait.
         Route::put   ('/transferts/{id}', [TransferController::class, 'update']);
         Route::delete('/transferts/{id}', [TransferController::class, 'destroy']);
+
+        // Indicateurs de trésorerie (lecture seule) : Trésorerie, À valider,
+        // Engagé, Décaissé, Disponible réel.
+        Route::get   ('/tresorerie/indicateurs', [TresorerieController::class, 'indicateurs']);
     });
 
 });
