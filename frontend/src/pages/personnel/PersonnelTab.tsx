@@ -18,7 +18,8 @@ interface Personnel {
   tel_pers: string;
   email_pers: string
   dembauche_pers: string;
-  salaire_pers: number;
+  // Absent pour un compte non administrateur : le serveur ne l'envoie pas.
+  salaire_pers?: number;
   diplome_pers: string
   adresse_pers: string;
   id_fonction: number;
@@ -37,7 +38,7 @@ const EMPTY_P = { matricule_pers:'', nom_pers:'', prenom_pers:'', ddn_pers:'', c
 // la vraie logique qui tournait dans PersonnelPage.tsx : useTable pour la
 // pagination/recherche server-side, ConfirmDialog pour la suppression, le
 // détail au clic sur une ligne, et les bons endpoints /personnel/....
-function DetailModal({ p, onClose }: { p: Personnel; onClose: () => void }) {
+function DetailModal({ p, voirSalaire, onClose }: { p: Personnel; voirSalaire: boolean; onClose: () => void }) {
   const rows: [string, string][] = [
     ['Matricule', p.matricule_pers],
     ['Nom', `${p.nom_pers} ${p.prenom_pers}`],
@@ -47,7 +48,7 @@ function DetailModal({ p, onClose }: { p: Personnel; onClose: () => void }) {
     ['CIN', p.cin_pers || '—'],
     ['Date de naissance', p.ddn_pers || '—'],
     ['Date d\'embauche', p.dembauche_pers || '—'],
-    ['Salaire', `${fmtM(p.salaire_pers)} Ar`],
+    ...(voirSalaire ? [['Salaire', `${fmtM(p.salaire_pers ?? 0)} Ar`] as [string, string]] : []),
     ['Diplôme', p.diplome_pers || '—'],
     ['Adresse', p.adresse_pers || '—'],
     ['Éditeur', p.editeur?.trim() || '—'],
@@ -74,6 +75,8 @@ function DetailModal({ p, onClose }: { p: Personnel; onClose: () => void }) {
 
 export default function PersonnelTab() {
   const { isAdmin } = useAuth()
+  // Salaires : réservés aux administrateurs (le serveur applique la même règle).
+  const voirSalaire = isAdmin()
   const fmt = fmtM
   const personnelTable = useTable<Personnel>('/personnel', { perPage: 15 })
 
@@ -123,7 +126,9 @@ export default function PersonnelTab() {
     try {
       // FIX : le champ Salaire est saisi formaté ("1 000 000") pour
       // l'affichage — on renvoie la valeur numérique brute à l'API.
-      const payloadP = { ...formP, salaire_pers: parseMontantInput(formP.salaire_pers) }
+      // Sans droit sur les salaires, le champ n'est pas envoyé du tout.
+      const { salaire_pers: salaireSaisi, ...sansSalaire } = formP
+      const payloadP = voirSalaire ? { ...sansSalaire, salaire_pers: parseMontantInput(salaireSaisi) } : sansSalaire
       if (editP) { await api.put(`/personnel/${editP.matricule_pers}`, payloadP); toast.success('Personnel modifié') }
       else       { await api.post('/personnel', payloadP); toast.success('Personnel enregistré') }
       setFormP(EMPTY_P); setEditP(null); personnelTable.reload()
@@ -140,7 +145,7 @@ export default function PersonnelTab() {
 
   const startEditPersonnel = (p: Personnel) => {
     setEditP(p)
-    setFormP({ matricule_pers:p.matricule_pers, nom_pers:p.nom_pers, prenom_pers:p.prenom_pers, ddn_pers:p.ddn_pers?.slice(0,10)??'', cin_pers:formatCinMG(p.cin_pers??''), tel_pers:p.tel_pers??'', email_pers:p.email_pers??'', dembauche_pers:p.dembauche_pers?.slice(0,10)??'', salaire_pers:formatMontantInput(String(p.salaire_pers)), diplome_pers:p.diplome_pers??'', adresse_pers:p.adresse_pers??'', id_fonction:String(p.id_fonction) })
+    setFormP({ matricule_pers:p.matricule_pers, nom_pers:p.nom_pers, prenom_pers:p.prenom_pers, ddn_pers:p.ddn_pers?.slice(0,10)??'', cin_pers:formatCinMG(p.cin_pers??''), tel_pers:p.tel_pers??'', email_pers:p.email_pers??'', dembauche_pers:p.dembauche_pers?.slice(0,10)??'', salaire_pers:formatMontantInput(String(p.salaire_pers ?? '')), diplome_pers:p.diplome_pers??'', adresse_pers:p.adresse_pers??'', id_fonction:String(p.id_fonction) })
     window.scrollTo({ top:0, behavior:'smooth' })
   }
 
@@ -156,7 +161,7 @@ export default function PersonnelTab() {
 
   const exportPersonnels = () => {
     if (personnelTable.data.length === 0) { toast.error('Aucune donnée'); return }
-    const rows = [['Matricule','Nom','Prénom','Fonction','Tél','Email','Salaire'], ...personnelTable.data.map(p=>[p.matricule_pers,p.nom_pers,p.prenom_pers,p.nom_fonction,p.tel_pers,p.email_pers,String(p.salaire_pers)])]
+    const rows = [['Matricule','Nom','Prénom','Fonction','Tél','Email', ...(voirSalaire ? ['Salaire'] : [])], ...personnelTable.data.map(p=>[p.matricule_pers,p.nom_pers,p.prenom_pers,p.nom_fonction,p.tel_pers,p.email_pers, ...(voirSalaire ? [String(p.salaire_pers ?? '')] : [])])]
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(r=>r.join(';')).join('\n')],{type:'text/csv'})); a.download='personnels.csv'; a.click()
     toast.success('Export CSV téléchargé')
   }
@@ -236,10 +241,12 @@ export default function PersonnelTab() {
                 <label className="form-label">Date d'embauche</label>
                 <input className="form-control" type="date" value={formP.dembauche_pers} onChange={e => setFormP({...formP, dembauche_pers:e.target.value})} />
               </div>
-              <div className="form-group">
-                <label className="form-label">Salaire (Ar)</label>
-                <input className="form-control" type="text" inputMode="numeric" value={formP.salaire_pers} onChange={e => setFormP({...formP, salaire_pers:formatMontantInput(e.target.value)})} placeholder="Ex: 100 000" />
-              </div>
+              {voirSalaire && (
+                <div className="form-group">
+                  <label className="form-label">Salaire (Ar)</label>
+                  <input className="form-control" type="text" inputMode="numeric" value={formP.salaire_pers} onChange={e => setFormP({...formP, salaire_pers:formatMontantInput(e.target.value)})} placeholder="Ex: 100 000" />
+                </div>
+              )}
             </div>
             <div className="form-row">
               <div className="form-group">
@@ -276,10 +283,10 @@ export default function PersonnelTab() {
         <div className="table-wrapper">
           {personnelTable.loading ? <div className="loading-center"><div className="spinner" /> Chargement…</div> : (
             <table>
-              <thead><tr><th>#</th><th>Photo</th><th>Matricule</th><th>Nom & Prénom</th><th>Fonction</th><th>Téléphone</th><th>Salaire</th><th>Action</th></tr></thead>
+              <thead><tr><th>#</th><th>Photo</th><th>Matricule</th><th>Nom & Prénom</th><th>Fonction</th><th>Téléphone</th>{voirSalaire && <th>Salaire</th>}<th>Action</th></tr></thead>
               <tbody>
                 {personnelTable.data.length === 0 ? (
-                  <tr><td colSpan={8}><div className="empty-state">{personnelTable.search ? `Aucun résultat pour « ${personnelTable.search} »` : 'Aucun personnel enregistré'}</div></td></tr>
+                  <tr><td colSpan={voirSalaire ? 8 : 7}><div className="empty-state">{personnelTable.search ? `Aucun résultat pour « ${personnelTable.search} »` : 'Aucun personnel enregistré'}</div></td></tr>
                 ) : personnelTable.data.map((p, i) => (
                   <tr key={p.matricule_pers} onClick={() => setViewingP(p)} style={{ cursor:'pointer' }}>
                     <td style={{ color:'#94a3b8', fontSize:13 }}>{(personnelTable.meta.current_page-1)*personnelTable.meta.per_page+i+1}</td>
@@ -299,7 +306,7 @@ export default function PersonnelTab() {
                     <td style={{ fontWeight:600 }}>{p.nom_pers} {p.prenom_pers}</td>
                     <td><span className="badge badge-success">{p.nom_fonction || '—'}</span></td>
                     <td style={{ fontSize:13, color:'#64748b' }}>{p.tel_pers || '—'}</td>
-                    <td style={{ fontWeight:600, color:'#16a34a' }}>{fmt(p.salaire_pers)} Ar</td>
+                    {voirSalaire && <td style={{ fontWeight:600, color:'#16a34a' }}>{fmt(p.salaire_pers ?? 0)} Ar</td>}
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => startEditPersonnel(p)}><IcoEdit /></button>
                       {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeletePersMat(p.matricule_pers)}><IcoTrash /></button>}
@@ -313,7 +320,7 @@ export default function PersonnelTab() {
         {!personnelTable.loading && personnelTable.meta.total > 0 && <Pagination meta={personnelTable.meta} onPage={personnelTable.setPage} onPerPage={personnelTable.setPerPage} />}
       </div>
 
-      {viewingP && <DetailModal p={viewingP} onClose={() => setViewingP(null)} />}
+      {viewingP && <DetailModal p={viewingP} voirSalaire={voirSalaire} onClose={() => setViewingP(null)} />}
 
       <ConfirmDialog
         open={!!confirmDeletePersMat}
