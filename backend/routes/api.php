@@ -69,6 +69,9 @@ Route::middleware(['auth:sanctum', 'admin.delete'])->group(function () {
     Route::apiResource('modules',  ModuleController::class)->only(['store', 'update', 'destroy'])
         ->middleware('permission:modules.manage');
     Route::apiResource('horaires', HoraireController::class);
+    // Lieux de formation et de paiement : liste, création et modification
+    // ouvertes comme les horaires ; la suppression suit admin.delete.
+    Route::apiResource('lieux', \App\Http\Controllers\LieuController::class)->except(['show']);
     Route::get('/sessions/en-cours', [SessionController::class, 'enCours']);
     Route::apiResource('sessions',   SessionController::class);
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import api from '../../api/axios'
+import api, { storageUrl } from '../../api/axios'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext'
 import { IcoCamera, IcoExcel, IcoSearch, IcoImage, IcoEdit, IcoPlus, IcoSave, IcoTrash, IcoX, IcoExport } from '../../components/icons'
@@ -88,7 +88,7 @@ export default function AchatTab() {
   const handleEdit = (a: Achat) => {
     setEditId(a.id_achat)
     setForm({ nom_materiel: a.nom_materiel, prix_unitaire: String(a.prix_unitaire), quantite: String(a.quantite), date_achat: a.date_achat?.slice(0, 10) ?? '', photo_achat: a.photo_achat ?? '' })
-    setPhotoPreview(a.photo_achat ? `http://localhost:8000/storage/${a.photo_achat}` : '')
+    setPhotoPreview(a.photo_achat ? storageUrl(a.photo_achat) : '')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -237,7 +237,7 @@ export default function AchatTab() {
                     <td style={{ color:'#94a3b8', fontSize:12 }}>{i + 1}</td>
                     <td>
                       <div style={{ width:36, height:36, borderRadius:6, border:'1px solid #e2e8f0', background:'#f8fafc', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
-                        {a.photo_achat ? <img src={`http://localhost:8000/storage/${a.photo_achat}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : <IcoImage />}
+                        {a.photo_achat ? <img src={storageUrl(a.photo_achat)} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : <IcoImage />}
                       </div>
                     </td>
                     <td style={{ fontWeight:600, color:'#1e293b' }}>{a.nom_materiel}</td>

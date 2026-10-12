@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import SessionForm    from './SessionForm'
 import HoraireForm    from './HoraireForm'
+import LieuForm       from './LieuForm'
 import SessionEnCours from './SessionEnCours'
 import { IcoClock} from '../../../components/icons'
 
-type SubTab = 'session' | 'horaire' | 'en-cours'
+type SubTab = 'session' | 'horaire' | 'lieu' | 'en-cours'
 
 export default function SessionTab() {
   const [tab, setTab] = useState<SubTab>('session')
@@ -19,6 +20,7 @@ export default function SessionTab() {
         {([
           ['session',  'Session'],
           ['horaire',  'Horaire'],
+          ['lieu',     'Lieu'],
           ['en-cours', 'Session en cours'],
         ] as [SubTab, string][]).map(([k, l]) => (
           <button key={k} className={`tab-btn${tab === k ? ' active' : ''}`} onClick={() => setTab(k)}>
@@ -30,6 +32,7 @@ export default function SessionTab() {
       <div style={{ padding: '4px 24px 24px' }}>
         {tab === 'session'  && <SessionForm />}
         {tab === 'horaire'  && <HoraireForm />}
+        {tab === 'lieu'     && <LieuForm />}
         {tab === 'en-cours' && <SessionEnCours />}
       </div>
     </div>

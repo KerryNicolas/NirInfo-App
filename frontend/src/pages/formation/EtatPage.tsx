@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import LieuSelect from '../../components/LieuSelect'
 import Sidebar from '../../components/Sidebar'
 import api from '../../api/axios'
 import toast from 'react-hot-toast'
@@ -318,12 +319,7 @@ export default function EtatPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Lieu</label>
-                  <select className="form-control" value={form.lieu} onChange={set('lieu')}>
-                    <option value="Tous">Tous les lieux</option>
-                    <option>Ampandrana</option>
-                    <option>Ampefiloha</option>
-                    <option>Andravoahangy</option>
-                  </select>
+                  <LieuSelect value={form.lieu} onChange={set('lieu')} tous />
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 10 }}>

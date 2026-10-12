@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Etudiant;
+use App\Services\MatriculeEtudiantService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -51,10 +52,9 @@ class EtudiantController extends BaseApiController
             'sexe'   => 'required|in:HOMME,FEMME',
         ]);
 
-        $last = DB::table('etudiant')->max(DB::raw("CAST(SUBSTRING(matricule_etudiant, 4) AS UNSIGNED)"));
-        $matricule = 'NI-' . str_pad(($last ?? 0) + 1, 4, '0', STR_PAD_LEFT);
-
-        DB::table('etudiant')->insert([
+        // Série partagée avec les certificats saisis à la main : le service
+        // tient compte des deux pour ne jamais donner deux fois le même numéro.
+        $matricule = app(MatriculeEtudiantService::class)->attribuer(fn (string $matricule) => DB::table('etudiant')->insert([
             'matricule_etudiant' => $matricule,
             'nom_etudiant'       => strtoupper($request->nom),
             'prenom_etudiant'    => $request->prenom,
@@ -69,7 +69,7 @@ class EtudiantController extends BaseApiController
             'photo_etudiant'     => '',
             // ── FIX : capture de l'éditeur, absente jusqu'ici (comme tous les autres modules) ──
             'matricule_s'        => auth()->user()->matricule ?? null,
-        ]);
+        ]));
 
         return $this->ok('Étudiant créé avec succès', ['matricule' => $matricule], 201);
     }

@@ -1,6 +1,6 @@
 import { useAuth } from '../../contexts/AuthContext'
 import { useEffect, useRef, useState } from 'react'
-import api from '../../api/axios'
+import api, { storageUrl } from '../../api/axios'
 import toast from 'react-hot-toast'
 
 interface Charge {
@@ -81,7 +81,7 @@ export default function ChargeTab() {
   const handleEdit = (c: Charge) => {
     setEditId(c.id_charge)
     setForm({ designation: c.designation, montant: String(c.montant), mois: String(c.mois), annee: String(c.annee), date: c.date?.slice(0, 10) ?? '', photo_charge: c.photo_charge ?? '' })
-    setPhotoPreview(c.photo_charge ? `http://localhost:8000/storage/${c.photo_charge}` : '')
+    setPhotoPreview(c.photo_charge ? storageUrl(c.photo_charge) : '')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -206,7 +206,7 @@ export default function ChargeTab() {
                     <td style={{ color:'#94a3b8', fontSize:12 }}>{i+1}</td>
                     <td>
                       <div style={{ width:36, height:36, borderRadius:6, border:'1px solid #e2e8f0', background:'#f8fafc', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
-                        {c.photo_charge ? <img src={`http://localhost:8000/storage/${c.photo_charge}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : <IcoImage />}
+                        {c.photo_charge ? <img src={storageUrl(c.photo_charge)} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : <IcoImage />}
                       </div>
                     </td>
                     <td style={{ fontWeight:600, color:'#1e293b' }}>{c.designation}</td>

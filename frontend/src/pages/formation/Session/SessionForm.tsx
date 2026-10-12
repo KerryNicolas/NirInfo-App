@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import LieuSelect from '../../../components/LieuSelect'
 import api from '../../../api/axios'
 import toast from 'react-hot-toast'
 import { useTable } from '../../../hooks/useTable'
@@ -193,11 +194,8 @@ export default function SessionForm() {
                 {/* FIX : réellement sauvegardé maintenant (colonne
                     session.lieu ajoutée) — avant, cette valeur était perdue
                     silencieusement. Modifiable même en édition. */}
-                <select className="form-control" value={form.lieu} onChange={set('lieu')}>
-                  <option value="Ampandrana">Ampandrana</option>
-                  <option value="Ampefiloha">Ampefiloha</option>
-                  <option value="Andravoahangy">Andravoahangy</option>
-                </select>
+                {/* Liste gérée dans l'onglet « Lieu ». */}
+                <LieuSelect value={form.lieu} onChange={set('lieu')} />
               </div>
               <div className="form-group">
                 <label className="form-label">ID Formateur</label>

@@ -1,8 +1,10 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Services\MatriculeEtudiantService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CertificationController extends BaseApiController
 {
@@ -26,8 +28,8 @@ class CertificationController extends BaseApiController
     // Champs de la saisie manuelle (certificat sans fiche étudiant).
     private const REGLES_MANUEL = [
         'nom_complet'    => 'required|string|max:255',
-        // Facultatif, texte libre : simple repère, SANS lien avec une fiche
-        // étudiant (aucune règle « exists »).
+        // Facultatif : vide = attribué automatiquement dans la série NI ;
+        // renseigné = matricule d'un étudiant existant (cf. matriculeSaisi()).
         'matricule'      => 'nullable|string|max:255',
         'nom_formation'  => 'required|string|max:255',
         'date_naissance' => 'nullable|date',
@@ -44,6 +46,32 @@ class CertificationController extends BaseApiController
         'date_fin.required'      => 'La date de fin de session est obligatoire.',
         'date_fin.after_or_equal'=> 'La fin de session ne peut pas être avant le début.',
     ];
+
+    /**
+     * Matricule saisi pour un certificat manuel, ou null si le champ est vide
+     * (le serveur en attribue alors un). Un matricule saisi doit être celui
+     * d'un étudiant existant — ou celui que le certificat porte déjà : un
+     * numéro inventé décalerait la série NI des étudiants.
+     */
+    private function matriculeSaisi(Request $request, ?object $existant): ?string
+    {
+        $saisi = trim((string) $request->matricule);
+        if ($saisi === '') {
+            return null;
+        }
+        if ($existant && strcasecmp($saisi, (string) $existant->matricule) === 0) {
+            return $existant->matricule;
+        }
+
+        $etudiant = DB::table('etudiant')->where('matricule_etudiant', $saisi)->value('matricule_etudiant');
+        if ($etudiant === null) {
+            throw ValidationException::withMessages([
+                'matricule' => "Ce matricule ne correspond à aucun étudiant. Laissez le champ vide : un matricule sera attribué automatiquement.",
+            ]);
+        }
+
+        return $etudiant;
+    }
 
     // Générateur UNIQUE de référence, partagé par les certificats normaux
     // et manuels : une seule numérotation CERT-AAAA-XXXX, sans doublon.
@@ -172,12 +200,18 @@ class CertificationController extends BaseApiController
     {
         $request->validate(self::REGLES_MANUEL, self::MESSAGES_MANUEL);
 
+        $saisi     = $this->matriculeSaisi($request, null);
         $reference = $this->genererReference();
         $prix      = $this->prixStandard();
 
-        $id = DB::table('certificat')->insertGetId([
+        // Sans matricule saisi, le certificat reçoit le prochain numéro de la
+        // série NI (celle des étudiants) : la liste affiche toujours un vrai
+        // matricule, jamais « Saisie manuelle ».
+        $id = null;
+        $enregistrer = function (string $matricule) use (&$id, $request, $reference, $prix) {
+            $id = DB::table('certificat')->insertGetId([
             'reference'             => $reference,
-            'matricule'             => $request->matricule ?? null,
+            'matricule'             => $matricule,
             'code_module'           => null,
             'code_session'          => null,
             'debut_session'         => $request->date_debut,
@@ -191,7 +225,15 @@ class CertificationController extends BaseApiController
             'nom_manuel'            => $request->nom_complet,
             'date_naissance_manuel' => $request->date_naissance ?? null,
             'lieu_naissance_manuel' => $request->lieu_naissance ?? null,
-        ]);
+            ]);
+        };
+
+        if ($saisi !== null) {
+            $matricule = $saisi;
+            $enregistrer($matricule);
+        } else {
+            $matricule = app(MatriculeEtudiantService::class)->attribuer($enregistrer);
+        }
 
         // Même forme qu'une ligne de index() : le front l'utilise tout de
         // suite pour la fenêtre de validation puis l'impression.
@@ -201,7 +243,7 @@ class CertificationController extends BaseApiController
             'certificat' => [
                 'id'             => $id,
                 'reference'      => $reference,
-                'matricule'      => $request->matricule ?? null,
+                'matricule'      => $matricule,
                 'nom'            => '',
                 'prenom'         => '',
                 'nom_complet'    => $request->nom_complet,
@@ -246,9 +288,19 @@ class CertificationController extends BaseApiController
         // (le prix se fixe à la validation). Réservé à l'admin côté écran.
         if (($c->origine ?? 'normal') === 'manuel') {
             $request->validate(self::REGLES_MANUEL, self::MESSAGES_MANUEL);
+
+            // Champ vidé : le certificat garde son matricule. S'il n'en avait
+            // pas encore (ancienne saisie), il en reçoit un maintenant.
+            $matricule = $this->matriculeSaisi($request, $c) ?? (trim((string) $c->matricule) !== '' ? $c->matricule : null);
+            if ($matricule === null) {
+                $matricule = app(MatriculeEtudiantService::class)->attribuer(
+                    fn (string $m) => DB::table('certificat')->where('id', $c->id)->update(['matricule' => $m])
+                );
+            }
+
             DB::table('certificat')->where('id', $c->id)->update([
                 'nom_manuel'            => $request->nom_complet,
-                'matricule'             => $request->matricule ?? null,
+                'matricule'             => $matricule,
                 'nom_formation'         => $request->nom_formation,
                 'date_naissance_manuel' => $request->date_naissance ?? null,
                 'lieu_naissance_manuel' => $request->lieu_naissance ?? null,

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import LieuSelect from '../../../components/LieuSelect'
 import api from '../../../api/axios'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../../contexts/AuthContext'
@@ -150,15 +151,17 @@ export default function CertificationManuelle({ editing, onDone }: {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Lieu de paiement</label>
-                <select className="form-control" value={form.lieu_paiement} onChange={set('lieu_paiement')}>
-                  <option>Ampandrana</option><option>Ampefiloha</option><option>Andravoahangy</option>
-                </select>
+                <LieuSelect value={form.lieu_paiement} onChange={set('lieu_paiement')} />
               </div>
               <div className="form-group">
-                <label className="form-label">Matricule (facultatif)</label>
-                {/* Texte libre : simple repère affiché dans la liste, sans
-                    lien avec une fiche étudiant. */}
-                <input className="form-control" value={form.matricule} onChange={set('matricule')} maxLength={255} placeholder="Ex: NI-3757" />
+                <label className="form-label">Matricule</label>
+                {/* Vide : le serveur attribue le prochain numéro de la série
+                    NI. Renseigné : ce doit être le matricule d'un étudiant
+                    existant (le serveur refuse un numéro inventé). */}
+                <input className="form-control" value={form.matricule} onChange={set('matricule')} maxLength={255} placeholder="Attribué automatiquement si vide" />
+                <p style={{ fontSize:12, color:'#94a3b8', marginTop:4 }}>
+                  Laissez vide pour un nouveau numéro, ou saisissez le matricule d'un étudiant existant.
+                </p>
               </div>
             </div>
             <button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:7 }} disabled={saving}>

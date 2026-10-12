@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import LieuSelect from '../../../components/LieuSelect'
 import api from '../../../api/axios'
 import toast from 'react-hot-toast'
 import { useMatriculeSuggestions } from '../../../hooks/useMatriculeSuggestions'
@@ -253,9 +254,7 @@ export default function InscriptionTab({ prefillMatricule, onPrefillConsumed }: 
               </div>
               <div className="form-group">
                 <label className="form-label">Lieu de paiement</label>
-                <select className="form-control" value={form.lieu_paiement} onChange={set('lieu_paiement')}>
-                  <option>Ampandrana</option><option>Ampefiloha</option><option>Andravoahangy</option>
-                </select>
+                <LieuSelect value={form.lieu_paiement} onChange={set('lieu_paiement')} />
               </div>
             </div>
             <button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:6 }} disabled={saving}>
