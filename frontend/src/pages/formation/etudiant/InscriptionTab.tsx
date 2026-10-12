@@ -47,7 +47,7 @@ function DetailModal({ i, onClose }: { i: Inscription; onClose: () => void }) {
           <span style={{ fontWeight:700, fontSize:16 }}>Détail de l'inscription</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:13 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:14 }}>
           {rows.map(([label, val]) => (
             <div key={label} style={{ display:'contents' }}>
               <span style={{ color:'#64748b' }}>{label} :</span>
@@ -299,16 +299,16 @@ export default function InscriptionTab({ prefillMatricule, onPrefillConsumed }: 
                   <tr><td colSpan={8}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucune inscription'}</div></td></tr>
                 ) : table.data.map((i, idx) => (
                   <tr key={i.id_paiement} onClick={() => setViewing(i)} style={{ cursor: 'pointer' }}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
                     <td>
                       <div style={{ fontWeight:600 }}>{i.nom} {i.prenom}</div>
-                      <div style={{ fontSize:11, color:'#94a3b8' }}>{i.matricule.toUpperCase()}</div>
+                      <div style={{ fontSize:12, color:'#94a3b8' }}>{i.matricule.toUpperCase()}</div>
                     </td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{i.code_session}</td>
-                    <td style={{ fontSize:12 }}>{i.date_paiement}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{i.code_session}</td>
+                    <td style={{ fontSize:13 }}>{i.date_paiement}</td>
                     <td style={{ fontWeight:600, color:'#16a34a' }}>{fmt(Number(i.montant_paye))} Ar</td>
                     <td><span className={`badge ${Number(i.reste) === 0 ? 'badge-success' : 'badge-danger'}`}>{fmt(Number(i.reste))} Ar</span></td>
-                    <td style={{ fontSize:11, color:'#2563eb', fontWeight:600 }}>{i.ref_facture || '—'}</td>
+                    <td style={{ fontSize:12, color:'#2563eb', fontWeight:600 }}>{i.ref_facture || '—'}</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(i)}><IcoEdit /></button>
                       {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(i.id_paiement)}><IcoTrash /></button>}

@@ -137,9 +137,9 @@ export default function TransferTab() {
                   <tr><td colSpan={5}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucun virement'}</div></td></tr>
                 ) : table.data.map((t, idx) => (
                   <tr key={t.id_transfer}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
-                    <td style={{ fontSize:12 }}>{t.starting_libelle}</td>
-                    <td style={{ fontSize:12 }}>{t.destination_libelle}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                    <td style={{ fontSize:13 }}>{t.starting_libelle}</td>
+                    <td style={{ fontSize:13 }}>{t.destination_libelle}</td>
                     <td style={{ fontWeight:600, color:'#2563eb' }}>{fmt(t.amount)} Ar</td>
                     <td><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(t)}><IcoEdit /></button>

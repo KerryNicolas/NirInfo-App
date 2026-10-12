@@ -26,7 +26,7 @@ function EditeurPopover({ editeur, onClose }: { editeur: string; onClose: () => 
           <span style={{ fontWeight:700, fontSize:14 }}>Éditeur</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ fontSize:13, color:'#334155' }}>{editeur?.trim() || 'Non renseigné'}</div>
+        <div style={{ fontSize:14, color:'#334155' }}>{editeur?.trim() || 'Non renseigné'}</div>
       </div>
     </div>
   )
@@ -147,11 +147,11 @@ export default function GererTab() {
                   <tr><td colSpan={6}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucune opération'}</div></td></tr>
                 ) : table.data.map((g, idx) => (
                   <tr key={g.id_transaction}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{g.libelle}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{g.libelle}</td>
                     <td><span className={`badge ${g.transaction_type === 'E' ? 'badge-success' : 'badge-danger'}`}>{g.transaction_type === 'E' ? 'DÉPÔT' : 'RETRAIT'}</span></td>
                     <td style={{ fontWeight:600, color: g.transaction_type === 'E' ? '#16a34a' : '#dc2626' }}>{fmt(g.amount)} Ar</td>
-                    <td style={{ fontSize:12 }}>{g.reson}</td>
+                    <td style={{ fontSize:13 }}>{g.reson}</td>
                     <td><div className="table-actions">
                       <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(g.editeur)}><IcoInfo /></button>
                       <button className="btn-icon edit" onClick={() => handleEdit(g)}><IcoEdit /></button>

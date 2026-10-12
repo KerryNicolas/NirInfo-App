@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import ParametresModal from './ParametresModal'
 import {
   SvgModule, SvgSession, SvgEtudiant, SvgFacture, SvgEtat, SvgEcheance, SvgCertif,
   SvgRetour, SvgHamburger, SvgSettings, SvgLogout,
@@ -26,7 +27,8 @@ function SvgArrowLeft() {
   )
 }
 
-interface MenuItem { label: string; to?: string; tab?: string; icon: JSX.Element }
+// permission : l'entrée n'est affichée qu'aux comptes qui la possèdent.
+interface MenuItem { label: string; to?: string; tab?: string; icon: JSX.Element; permission?: string }
 
 interface Props {
   section: 'formation' | 'etudiant' | 'facture' | 'services' | 'budgets' | 'logistique' | 'personnel'
@@ -37,7 +39,9 @@ interface Props {
 // FIX : menus par section — Formation inchangé, Services et Budgets ajoutés,
 // Logistique ajoutée (basée sur des onglets internes, pas des routes).
 const formationMenuItems: MenuItem[] = [
-  { label: 'Module',        to: '/formation/module',  icon: <SvgModule /> },
+  // Gestion des modules : administrateur principal uniquement (le serveur
+  // refuse aussi toute écriture sans modules.manage).
+  { label: 'Module',        to: '/formation/module',  icon: <SvgModule />, permission: 'modules.manage' },
   { label: 'Session',       to: '/formation/session', icon: <SvgSession /> },
   { label: 'Etudiant',      to: '/etudiant/etudiant', icon: <SvgEtudiant /> },
   { label: 'Facture',       to: '/facture',           icon: <SvgFacture /> },
@@ -100,9 +104,9 @@ const STORAGE_KEY = 'nirinfo_sidebar_open'
 const MOBILE_BREAKPOINT = 768
 
 export default function Sidebar({ section, activeTab, onTabChange }: Props) {
-  const { logout } = useAuth()
+  const { logout, hasPermission } = useAuth()
   const navigate   = useNavigate()
-  const menuItems  = menuItemsBySection[section]
+  const menuItems  = menuItemsBySection[section].filter(i => !i.permission || hasPermission(i.permission))
 
   const [open, setOpen] = useState<boolean>(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
@@ -119,8 +123,15 @@ export default function Sidebar({ section, activeTab, onTabChange }: Props) {
     localStorage.setItem(STORAGE_KEY, String(open))
   }, [open])
 
+  // « Paramètres » ouvre la fenêtre du profil par-dessus la page, sans navigation.
+  const [parametres, setParametres] = useState(false)
+  const parametresOuverts = useRef(false)
+  parametresOuverts.current = parametres
+
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    // Échap replie le menu — sauf si la fenêtre des paramètres est ouverte :
+    // la touche ne doit alors fermer que la fenêtre.
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !parametresOuverts.current) setOpen(false) }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
@@ -255,14 +266,14 @@ export default function Sidebar({ section, activeTab, onTabChange }: Props) {
 
         <div className="sidebar-footer" style={{ padding: open ? '8px 12px' : '8px 6px', transition: 'padding 0.2s' }}>
           <button
-            onClick={() => { navigate('/profile'); closeIfMobile() }}
+            onClick={() => { setParametres(true); closeIfMobile() }}
             title={!open ? 'Paramètres' : undefined}
             style={{
               width: '100%', display: 'flex', alignItems: 'center',
               justifyContent: open ? 'flex-start' : 'center', gap: open ? 7 : 0, marginBottom: 6,
               background: 'rgba(255,255,255,0.06)', color: '#94a3b8',
               border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
-              padding: open ? '7px 10px' : '7px', fontSize: 12, fontWeight: 500,
+              padding: open ? '7px 10px' : '7px', fontSize: 13, fontWeight: 500,
               cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
               overflow: 'hidden', whiteSpace: 'nowrap',
             }}
@@ -281,7 +292,7 @@ export default function Sidebar({ section, activeTab, onTabChange }: Props) {
               justifyContent: open ? 'flex-start' : 'center', gap: open ? 7 : 0,
               background: 'rgba(239,68,68,0.12)', color: '#fca5a5',
               border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8,
-              padding: open ? '7px 10px' : '7px', fontSize: 12, fontWeight: 600,
+              padding: open ? '7px 10px' : '7px', fontSize: 13, fontWeight: 600,
               cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
               overflow: 'hidden', whiteSpace: 'nowrap',
             }}
@@ -293,6 +304,8 @@ export default function Sidebar({ section, activeTab, onTabChange }: Props) {
           </button>
         </div>
       </div>
+
+      <ParametresModal open={parametres} onClose={() => setParametres(false)} />
     </>
   )
 }

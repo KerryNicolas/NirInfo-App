@@ -28,6 +28,9 @@ class Kernel extends HttpKernel
             // Sans ce middleware, seul un vrai Bearer token fonctionnerait — impossible
             // de passer à l'auth par cookie httpOnly sans lui.
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            // Chaque réponse dit quelle session l'a produite (en-tête X-Utilisateur) :
+            // l'écran écarte une réponse qui n'est pas celle du compte qu'il affiche.
+            \App\Http\Middleware\IdentiteDeLaReponse::class,
             // Throttle toujours volontairement absent ici (cf. commentaire d'origine
             // sur les erreurs 429) — le throttle est réappliqué route par route
             // dans routes/api.php pour login/forgot-password/reset-password.

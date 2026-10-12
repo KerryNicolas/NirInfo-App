@@ -48,7 +48,7 @@ function DetailModal({ e, onClose }: { e: Etudiant; onClose: () => void }) {
             onError={(ev) => { (ev.target as HTMLImageElement).src = Avatar }}
             style={{ width:110, height:130, objectFit:'cover', borderRadius:8, border:'1px solid #e2e8f0', flexShrink:0 }}
           />
-          <div style={{ flex:1, display:'grid', gridTemplateColumns:'auto 1fr', gap:'6px 14px', fontSize:13, alignContent:'start' }}>
+          <div style={{ flex:1, display:'grid', gridTemplateColumns:'auto 1fr', gap:'6px 14px', fontSize:14, alignContent:'start' }}>
             {rows.map(([label, val]) => (
               <div key={label} style={{ display:'contents' }}>
                 <span style={{ color:'#64748b' }}>{label} :</span>
@@ -322,12 +322,12 @@ export default function EtudiantTab({ onInscrire }: EtudiantTabProps) {
                   <IcoCameraModern /> Photo
                 </button>
                 {pendingFile && !editing && (
-                  <div style={{ fontSize: 11, color: '#d97706', textAlign: 'center' }}>
+                  <div style={{ fontSize: 12, color: '#d97706', textAlign: 'center' }}>
                     Sera envoyée après enregistrement
                   </div>
                 )}
                 {newMatricule && (
-                  <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '8px 12px', fontSize: 12, textAlign: 'center', color: '#16a34a', fontWeight: 700 }}>
+                  <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '8px 12px', fontSize: 13, textAlign: 'center', color: '#16a34a', fontWeight: 700 }}>
                     Matricule : {newMatricule}
                   </div>
                 )}
@@ -405,7 +405,7 @@ export default function EtudiantTab({ onInscrire }: EtudiantTabProps) {
                   </tr>
                 ) : table.data.map((e, idx) => (
                   <tr key={e.matricule} onClick={() => setViewing(e)} style={{ cursor: 'pointer' }}>
-                    <td style={{ color: '#94a3b8', fontSize: 12 }}>
+                    <td style={{ color: '#94a3b8', fontSize: 13 }}>
                       {(table.meta.current_page - 1) * table.meta.per_page + idx + 1}
                     </td>
                     <td>
@@ -428,8 +428,8 @@ export default function EtudiantTab({ onInscrire }: EtudiantTabProps) {
                         {e.sexe}
                       </span>
                     </td>
-                    <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{e.telephone}</td>
-                    <td style={{ fontSize: 12 }}>{e.email}</td>
+                    <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{e.telephone}</td>
+                    <td style={{ fontSize: 13 }}>{e.email}</td>
                     <td onClick={ev => ev.stopPropagation()}>
                       <div className="table-actions">
                         {/* FIX : nouveau bouton + — bascule vers l'onglet

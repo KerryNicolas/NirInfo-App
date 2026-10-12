@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import api from '../../api/axios'
 import toast from 'react-hot-toast'
+import { useAuth } from '../../contexts/AuthContext'
 import { IcoCamera, IcoExcel, IcoSearch, IcoImage, IcoEdit, IcoPlus, IcoSave, IcoTrash, IcoX, IcoExport } from '../../components/icons'
 
 interface Achat {
@@ -21,6 +22,7 @@ const fmt = (n: number) => new Intl.NumberFormat('fr-MG').format(n)
 const emptyForm = { nom_materiel: '', prix_unitaire: '', quantite: '1', date_achat: '', photo_achat: '' }
 
 export default function AchatTab() {
+  const { isAdmin } = useAuth()
   const [achats, setAchats]       = useState<Achat[]>([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
@@ -249,10 +251,12 @@ export default function AchatTab() {
                           style={{ display:'flex', alignItems:'center', gap:4, background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe', borderRadius:6, padding:'5px 9px', fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
                           <IcoEdit /> Modifier
                         </button>
-                        <button onClick={() => handleDelete(a.id_achat)} title="Supprimer"
-                          style={{ display:'flex', alignItems:'center', gap:4, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca', borderRadius:6, padding:'5px 9px', fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
-                          <IcoTrash /> Suppr.
-                        </button>
+                        {isAdmin() && (
+                          <button onClick={() => handleDelete(a.id_achat)} title="Supprimer"
+                            style={{ display:'flex', alignItems:'center', gap:4, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca', borderRadius:6, padding:'5px 9px', fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                            <IcoTrash /> Suppr.
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

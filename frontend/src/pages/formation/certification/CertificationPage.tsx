@@ -27,7 +27,7 @@ export default function CertificationPage() {
     { key: 'certification', label: 'Certification' },
     { key: 'manuelle',      label: 'Saisie manuelle', adminOnly: true },
     { key: 'prix',          label: 'Modifier prix',   adminOnly: true },
-    { key: 'montant',       label: 'Montant perçu' },
+    { key: 'montant',       label: 'Montant perçu',   adminOnly: true },
   ]
   const visibles = tabs.filter(t => !t.adminOnly || admin)
   // Si l'onglet courant n'est pas autorisé, on retombe sur le mode automatique.

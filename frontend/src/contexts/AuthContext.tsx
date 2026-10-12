@@ -10,6 +10,8 @@ interface User {
   role_slug?: string
   permissions?: string[]
   matricule?: string
+  // Adresse de la photo de profil ; absente = afficher les initiales.
+  photo_url?: string | null
 }
 
 interface AuthCtx {
@@ -20,6 +22,8 @@ interface AuthCtx {
   resetPassword: (data: ResetPasswordData) => Promise<void>
   activateAccount: (data: ResetPasswordData) => Promise<void>
   updateProfile: (data: UpdateProfileData) => Promise<void>
+  uploadPhoto: (file: File) => Promise<void>
+  removePhoto: () => Promise<void>
   hasPermission: (slug: string) => boolean
   isAdmin: () => boolean
   loading: boolean
@@ -111,18 +115,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.data.user)
   }
 
+  // Photo de profil du compte connecté (le serveur ne connaît que celle-là).
+  const uploadPhoto = async (file: File) => {
+    const fd = new FormData(); fd.append('photo', file)
+    const res = await api.post('/profile/photo', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    setUser(res.data.user)
+  }
+
+  const removePhoto = async () => {
+    const res = await api.post('/profile/photo/retirer')
+    setUser(res.data.user)
+  }
+
   const hasPermission = (slug: string): boolean => {
     return user?.permissions?.includes(slug) ?? false
   }
 
+  // Administrateur au sens large : admin secondaire OU administrateur
+  // principal (super-admin) — même règle que User::isAdmin() côté serveur.
   const isAdmin = (): boolean => {
-    return user?.role_slug === 'admin'
+    return user?.role_slug === 'admin' || user?.role_slug === 'super-admin'
   }
 
   return (
     <AuthContext.Provider value={{
       user, login, logout,
       forgotPassword, resetPassword, activateAccount, updateProfile,
+      uploadPhoto, removePhoto,
       hasPermission, isAdmin,
       loading,
     }}>

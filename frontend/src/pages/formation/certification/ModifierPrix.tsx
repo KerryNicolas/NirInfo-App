@@ -84,7 +84,7 @@ export default function ModifierPrix() {
             </button>
           </form>
           {!loading && (
-            <div style={{ fontSize:12, color:'#94a3b8', marginTop:10 }}>
+            <div style={{ fontSize:13, color:'#94a3b8', marginTop:10 }}>
               Prix actuellement appliqué par défaut aux nouvelles certifications : <b>{fmtMontant(prixActuel)} Ar</b>
             </div>
           )}

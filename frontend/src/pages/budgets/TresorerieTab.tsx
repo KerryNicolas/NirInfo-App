@@ -36,10 +36,10 @@ const ROUGE = '#dc2626'
 function Carte({ titre, valeur, detail, couleur, note }: { titre: string; valeur: string; detail?: string; couleur: string; note?: string }) {
   return (
     <div className="card" data-indicateur={titre} style={{ padding: 16, borderTop: `3px solid ${couleur}` }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>{titre}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 }}>{titre}</div>
       <div data-valeur style={{ fontSize: 22, fontWeight: 700, color: couleur, margin: '6px 0 4px' }}>{valeur}</div>
-      {detail && <div data-detail style={{ fontSize: 12, color: '#64748b' }}>{detail}</div>}
-      {note && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{note}</div>}
+      {detail && <div data-detail style={{ fontSize: 13, color: '#64748b' }}>{detail}</div>}
+      {note && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{note}</div>}
     </div>
   )
 }
@@ -93,7 +93,7 @@ export default function TresorerieTab() {
         </div>
         <div className="card-body">
           {erreur && (
-            <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: ROUGE, borderRadius: 7, padding: '10px 12px', fontSize: 13, marginBottom: donnees ? 14 : 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: ROUGE, borderRadius: 7, padding: '10px 12px', fontSize: 14, marginBottom: donnees ? 14 : 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <span>{erreur}</span>
               <button type="button" className="btn btn-sm" onClick={() => charger(periode)}>Réessayer</button>
             </div>
@@ -104,7 +104,7 @@ export default function TresorerieTab() {
           {donnees && t && (
             <div style={{ opacity: loading ? 0.55 : 1 }}>
               {!actif && (
-                <div data-suivi-inactif style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', borderRadius: 7, padding: '10px 12px', fontSize: 13, marginBottom: 14 }}>
+                <div data-suivi-inactif style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', borderRadius: 7, padding: '10px 12px', fontSize: 14, marginBottom: 14 }}>
                   Le suivi des dépenses n'est pas activé sur cette installation : seule la trésorerie est disponible.
                   Les indicateurs À valider, Engagé, Décaissé et Disponible réel apparaîtront à son activation.
                 </div>
@@ -134,7 +134,7 @@ export default function TresorerieTab() {
               </div>
 
               {actif && (
-                <div data-avertissement style={{ fontSize: 12, color: '#64748b', marginTop: 14, lineHeight: 1.5 }}>
+                <div data-avertissement style={{ fontSize: 13, color: '#64748b', marginTop: 14, lineHeight: 1.5 }}>
                   Le disponible réel est <strong>global</strong> : il n'existe pas par compte, car une dépense validée n'a pas encore de compte
                   (il est choisi au paiement). Il dépend des soldes enregistrés ci-dessous : il vaut ce que valent ces soldes.
                 </div>
@@ -167,7 +167,7 @@ export default function TresorerieTab() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button type="submit" className="btn btn-primary" disabled={loading}>Appliquer</button>
                 <button type="button" className="btn btn-sm" onClick={moisEnCours} disabled={loading}>Mois en cours</button>
-                <span style={{ fontSize: 12, color: '#94a3b8' }}>Une date laissée vide garde la borne du mois en cours.</span>
+                <span style={{ fontSize: 13, color: '#94a3b8' }}>Une date laissée vide garde la borne du mois en cours.</span>
               </div>
             </form>
             <div className="table-wrapper">
@@ -182,7 +182,7 @@ export default function TresorerieTab() {
                 </tbody>
               </table>
             </div>
-            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 10 }}>
+            <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 10 }}>
               « Ancien système » : dépenses payées avant la mise en place du suivi, comptées à la date de leur paiement d'origine.
             </div>
           </div>
@@ -205,8 +205,8 @@ export default function TresorerieTab() {
                   <tr><td colSpan={4}><div className="empty-state">Aucun compte</div></td></tr>
                 ) : t.comptes.map((c, idx) => (
                   <tr key={c.id_compte}>
-                    <td style={{ color: '#94a3b8', fontSize: 12 }}>{idx + 1}</td>
-                    <td style={{ fontSize: 12, color: '#64748b' }}>{c.account_number}</td>
+                    <td style={{ color: '#94a3b8', fontSize: 13 }}>{idx + 1}</td>
+                    <td style={{ fontSize: 13, color: '#64748b' }}>{c.account_number}</td>
                     <td style={{ fontWeight: 600 }}>{c.libelle}</td>
                     <td style={{ fontWeight: 600, color: c.solde < 0 ? ROUGE : '#16a34a' }}>
                       {ar(c.solde)}

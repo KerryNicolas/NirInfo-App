@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import api from '../api/axios'
+import { useAuth } from '../contexts/AuthContext'
 
 export interface TableMeta {
   total:        number
@@ -74,18 +75,44 @@ const CHAMPS_PAGINATION = ['data', 'total', 'per_page', 'current_page', 'last_pa
 // Évite de re-fetcher quand on navigue entre onglets puis qu'on revient.
 const globalCache = new Map<string, CacheEntry<unknown>>()
 
-function buildKey(endpoint: string, opts: FetchOpts): string {
-  return `${endpoint}::${JSON.stringify(opts)}`
+// ── Le cache appartient à UNE identité ──
+// FIX : les clés du cache ne disaient pas QUI avait obtenu les données. Après
+// une déconnexion puis la connexion d'un autre compte dans le même onglet, les
+// listes du premier utilisateur étaient réaffichées telles quelles — sans
+// limite de durée, et pour de bon si le rafraîchissement échouait.
+//
+// Chaque clé commence maintenant par l'identité de l'utilisateur :
+//     « <identité>|<endpoint>::<options en JSON> »
+// Un écran ne lit et n'écrit que les clés de l'identité courante : il ne peut
+// pas tomber sur les données d'un autre compte. Rien n'est modifié pendant le
+// rendu ; l'identité de l'onglet n'est mise à jour que dans un effet.
+//
+// Identité : undefined = session pas encore connue (chargement de
+// l'application) ; null = personne n'est connecté ; nombre = utilisateur
+// connecté. Elle est lue dans AuthContext, qui n'est pas modifié.
+type Identite = number | null | undefined
+
+// Identité pour laquelle cet onglet charge et range des listes. Mise à jour
+// UNIQUEMENT dans un effet (jamais pendant le rendu).
+let identiteDeLOnglet: Identite = undefined
+
+function buildKey(identite: number, endpoint: string, opts: FetchOpts): string {
+  return `${identite}|${endpoint}::${JSON.stringify(opts)}`
 }
 
-// Une clé est « <endpoint>::<options en JSON> », et ce JSON commence toujours
-// par « { » : l'endpoint d'une clé est donc tout ce qui précède le premier
-// « ::{ ». Il se compare EN ENTIER, jamais par préfixe : « /sessions » ne
-// désigne pas « /sessions/en-cours ».
-function endpointDeLaCle(cle: string): string {
-  const fin = cle.indexOf('::{')
-  return fin === -1 ? cle : cle.slice(0, fin)
+// L'identité est un nombre : elle s'arrête à la première barre. Le JSON des
+// options commence toujours par « { » : l'endpoint est ce qui se trouve entre
+// cette barre et le premier « ::{ ». Les deux se comparent EN ENTIER, jamais
+// par préfixe : « /sessions » ne désigne pas « /sessions/en-cours ».
+function partiesDeLaCle(cle: string): { identite: string; endpoint: string } {
+  const barre = cle.indexOf('|')
+  const fin   = cle.indexOf('::{')
+  return { identite: cle.slice(0, barre), endpoint: cle.slice(barre + 1, fin === -1 ? undefined : fin) }
 }
+
+// Références stables rendues quand les données détenues ne sont pas celles de l'identité courante.
+const AUCUNE_LIGNE: never[] = []
+const AUCUN_EXTRA: Record<string, unknown> = {}
 
 export function useTable<T = Record<string, unknown>>(
   endpoint: string,
@@ -114,6 +141,14 @@ export function useTable<T = Record<string, unknown>>(
   const [sortCol,      setSortCol]     = useState(initSort)
   const [sortDir,      setSortDir]     = useState<'asc' | 'desc'>(initDir)
   const [extraParams,  setExtraParams] = useState<Record<string, string | number>>(extraParamsInit)
+
+  // Identité courante : simplement LUE pendant le rendu.
+  const { user, loading: sessionEnCours } = useAuth()
+  const identite: Identite = sessionEnCours ? undefined : (user?.id ?? null)
+  // Identité qui a obtenu les données détenues par ce composant.
+  const [proprietaire, setProprietaire] = useState<Identite>(undefined)
+  // Vrai dès qu'une liste a été demandée (un écran en autoLoad:false n'est rechargé que s'il l'avait déjà été).
+  const aDejaCharge = useRef(false)
 
   const stateRef = useRef({ page, perPage, search, sortCol, sortDir, extraParams })
   stateRef.current = { page, perPage, search, sortCol, sortDir, extraParams }
@@ -161,11 +196,14 @@ export function useTable<T = Record<string, unknown>>(
 
   // Précharge silencieusement une page dans le cache global, sans toucher au state affiché.
   const prefetchPage = useCallback((opts: FetchOpts) => {
-    const key = buildKey(endpoint, opts)
+    const pour = identiteDeLOnglet
+    if (typeof pour !== 'number') return
+    const key = buildKey(pour, endpoint, opts)
     if (globalCache.has(key) || prefetchingRef.current.has(key)) return
     prefetchingRef.current.add(key)
     rawFetch(opts).then(entry => {
-      globalCache.set(key, entry as CacheEntry<unknown>)
+      // Réponse arrivée après un changement d'identité : elle n'est pas rangée.
+      if (identiteDeLOnglet === pour) globalCache.set(key, entry as CacheEntry<unknown>)
     }).catch(() => { /* silencieux : un prefetch raté n'affiche pas d'erreur */ }
     ).finally(() => {
       prefetchingRef.current.delete(key)
@@ -173,7 +211,13 @@ export function useTable<T = Record<string, unknown>>(
   }, [endpoint, rawFetch])
 
   const fetchData = useCallback(async (opts: FetchOpts) => {
-    const key = buildKey(endpoint, opts)
+    // Aucune liste n'est demandée tant qu'aucun utilisateur n'est connu. « pour »
+    // est l'identité au DÉPART de la requête : elle sert de clé, et de témoin
+    // au retour.
+    const pour = identiteDeLOnglet
+    if (typeof pour !== 'number') return
+    aDejaCharge.current = true
+    const key = buildKey(pour, endpoint, opts)
     const cached = globalCache.get(key) as CacheEntry<T> | undefined
 
     // Annule la requête en vol précédente (évite les races page2/page3)
@@ -186,6 +230,7 @@ export function useTable<T = Record<string, unknown>>(
       setData(cached.data)
       setMeta(cached.meta)
       setExtra(cached.extra)
+      setProprietaire(pour)
       setInitialLoad(false)
       setError(null)
       const isFresh = Date.now() - cached.timestamp < staleTime
@@ -204,22 +249,35 @@ export function useTable<T = Record<string, unknown>>(
 
     try {
       const entry = await rawFetch(opts, controller.signal)
+      // L'identité a changé pendant la requête : cette réponse est celle d'un
+      // autre compte. Elle n'entre pas dans le cache et n'est pas affichée.
+      if (identiteDeLOnglet !== pour) return
       globalCache.set(key, entry as CacheEntry<unknown>)
       setData(entry.data)
       setMeta(entry.meta)
       setExtra(entry.extra)
+      setProprietaire(pour)
       setInitialLoad(false)
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === 'CanceledError' || (err as { name?: string })?.name === 'AbortError') {
         return // requête annulée volontairement, on ignore
       }
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Erreur de chargement'
-      if (!cached) {
+      if (identiteDeLOnglet !== pour) return // échec d'une requête lancée pour une identité précédente : rien à afficher
+      const reponse = (err as { response?: { status?: number; data?: { message?: string } } })?.response
+      const msg = reponse?.data?.message ?? 'Erreur de chargement'
+      // FIX : un refus du serveur (401, 403) signifie que ces données ne sont
+      // plus accessibles à l'utilisateur. On ne laisse donc pas l'ancienne
+      // copie à l'écran, et on l'oublie.
+      const refuse = reponse?.status === 401 || reponse?.status === 403
+      if (refuse) globalCache.delete(key)
+      if (!cached || refuse) {
         setError(msg)
         setData([])
         setExtra({})
+        setProprietaire(pour)
       }
-      // si on avait du cache, on le laisse affiché plutôt que de vider l'écran sur une erreur de revalidation
+      // Panne passagère (réseau, erreur 500) avec du cache : on laisse affichées
+      // les données de CE MÊME utilisateur plutôt que de vider l'écran.
     } finally {
       setLoading(false)
       setIsValidating(false)
@@ -231,13 +289,26 @@ export function useTable<T = Record<string, unknown>>(
     }
   }, [endpoint, rawFetch, staleTime, prefetchNext, prefetchPage])
 
-  // Chargement initial
+  // Chargement initial, et rechargement à chaque changement d'identité.
+  // C'est ICI, dans un effet, que l'onglet change d'identité : la requête en
+  // vol est abandonnée, les entrées des autres identités sont retirées du
+  // cache, puis la liste est demandée pour l'utilisateur connecté.
+  // L'effet ne dépend que de l'identité (un nombre) : il ne peut pas boucler.
   useEffect(() => {
-    if (autoLoad) {
-      fetchData({ page: 1, perPage: initPerPage, search: '', sortCol: initSort, sortDir: initDir, extraParams: extraParamsInit })
+    abortRef.current?.abort()
+    identiteDeLOnglet = identite
+    if (identite !== undefined) {
+      for (const cle of [...globalCache.keys()]) {
+        if (partiesDeLaCle(cle).identite !== String(identite)) globalCache.delete(cle)
+      }
+    }
+    if (typeof identite !== 'number') return
+    if (autoLoad || aDejaCharge.current) {
+      const s = stateRef.current
+      fetchData({ page: s.page, perPage: s.perPage, search: s.search, sortCol: s.sortCol, sortDir: s.sortDir, extraParams: s.extraParams })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [identite])
 
   // Rechargement quand extraParams changent
   const prevParamsRef = useRef(JSON.stringify(extraParamsInit))
@@ -294,12 +365,11 @@ export function useTable<T = Record<string, unknown>>(
     // suppression. Ce ne sont alors pas seulement les lignes de la page
     // affichée qui sont périmées, mais TOUTES les variantes en cache de cette
     // liste (autres pages, autres filtres, autre recherche, autre tri : lignes
-    // décalées, totaux changés). Avant, seule la page affichée était oubliée,
-    // et les autres restaient servies telles quelles pendant 30 s.
-    // Seules les clés de CET endpoint sont oubliées : les autres listes gardent
-    // leur cache.
+    // décalées, totaux changés). Seules les clés de CET endpoint, pour
+    // l'identité courante, sont oubliées : les autres listes gardent leur cache.
     for (const cle of [...globalCache.keys()]) {
-      if (endpointDeLaCle(cle) === endpoint) globalCache.delete(cle) // force un vrai refetch réseau, pas juste relire le cache
+      const p = partiesDeLaCle(cle)
+      if (p.endpoint === endpoint && p.identite === String(identiteDeLOnglet)) globalCache.delete(cle) // force un vrai refetch réseau, pas juste relire le cache
     }
     fetchData({ page: s.page, perPage: s.perPage, search: s.search, sortCol: s.sortCol, sortDir: s.sortDir, extraParams: s.extraParams })
   }, [fetchData, endpoint])
@@ -310,8 +380,16 @@ export function useTable<T = Record<string, unknown>>(
     fetchData({ page: 1, perPage, search: '', sortCol: initSort, sortDir: initDir, extraParams: extraParamsInit })
   }, [fetchData, perPage, initSort, initDir, extraParamsInit])
 
+  // Les données détenues ne sont rendues que si elles ont été obtenues par
+  // l'identité courante. Simple comparaison : rien n'est modifié ici.
+  const aJour = typeof identite === 'number' && proprietaire === identite
+
   return {
-    data, loading, initialLoad, isValidating, error, meta, extra,
+    data:  aJour ? data  : AUCUNE_LIGNE,
+    meta:  aJour ? meta  : DEFAULT_META,
+    extra: aJour ? extra : AUCUN_EXTRA,
+    error: aJour ? error : null,
+    loading, initialLoad, isValidating,
     search, sortCol, sortDir,
     setSearch, setPage, setSort, setPerPage,
     setParams,

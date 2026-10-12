@@ -17,7 +17,7 @@ interface ModuleFormProps {
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 13.5,
+  fontSize: 14.5,
   fontWeight: 500,
   color: '#3d4f6e',
   letterSpacing: '0.01em',
@@ -40,14 +40,16 @@ const inputStyle = (disabled: boolean): React.CSSProperties => ({
 
 export default function ModuleForm({ form, editing, saving, onChange, onSubmit, onCancel }: ModuleFormProps) {
   return (
-    <div className="card" style={{ marginBottom: 20, maxWidth: 1330 }}>
+    // Même carte que les autres formulaires : pas de largeur maximale, elle
+    // suit donc la liste des modules en dessous à tous les niveaux de zoom.
+    <div className="card" style={{ marginBottom: 20 }}>
       <div className="card-header">
                 <span className="card-title" style={{ display:'flex', alignItems:'center', gap:7 }}>{editing ? <IcoEdit /> : <IcoPlus />} {editing ? "Modifier le module" : 'Nouveau module'}</span>
                 {editing && <button className="btn btn-sm" onClick={onCancel} style={{ display:'flex', alignItems:'center', gap:5, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca' }}><IcoX /> Annuler</button>}
       </div>
 
       <div className="card-body">
-        <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <form onSubmit={onSubmit}>
 
           <div className="form-group">
             <label className="form-label">Code <span style={{ color: '#ef4444' }}></span></label>
@@ -80,15 +82,13 @@ export default function ModuleForm({ form, editing, saving, onChange, onSubmit, 
               placeholder="Description du module" />
           </div>
 
-          <div style={{ marginTop: 0 }}>
-              <button type="submit" className="btn btn-primary"
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }} disabled={saving}>
-                {saving
-                  ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Enregistrement…</>
-                  : editing ? <><IcoSave /> Mettre à jour</> : <><IcoPlus /> Enregistrer</>
-                }
-              </button>
-          </div>
+          <button type="submit" className="btn btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }} disabled={saving}>
+            {saving
+              ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Enregistrement…</>
+              : editing ? <><IcoSave /> Mettre à jour</> : <><IcoPlus /> Enregistrer</>
+            }
+          </button>
 
         </form>
       </div>

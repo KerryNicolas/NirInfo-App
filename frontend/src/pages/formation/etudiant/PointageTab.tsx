@@ -152,7 +152,7 @@ export default function PointageTab() {
                 </span>
                 <div>
                   <p style={{ fontSize: 18, fontWeight: 800, color: '#16a34a', lineHeight: 1 }}>{presentCount}</p>
-                  <p style={{ fontSize: 11, color: '#64748b' }}>Présent(s)</p>
+                  <p style={{ fontSize: 12, color: '#64748b' }}>Présent(s)</p>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 9, padding: '8px 14px' }}>
@@ -161,13 +161,13 @@ export default function PointageTab() {
                 </span>
                 <div>
                   <p style={{ fontSize: 18, fontWeight: 800, color: '#dc2626', lineHeight: 1 }}>{absentCount}</p>
-                  <p style={{ fontSize: 11, color: '#64748b' }}>Absent(s)</p>
+                  <p style={{ fontSize: 12, color: '#64748b' }}>Absent(s)</p>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 9, padding: '8px 14px' }}>
                 <div>
                   <p style={{ fontSize: 18, fontWeight: 800, color: '#2563eb', lineHeight: 1 }}>{rows.length}</p>
-                  <p style={{ fontSize: 11, color: '#64748b' }}>Total inscrit(s)</p>
+                  <p style={{ fontSize: 12, color: '#64748b' }}>Total inscrit(s)</p>
                 </div>
               </div>
             </div>
@@ -183,7 +183,7 @@ export default function PointageTab() {
                 <tbody>
                   {rows.map((r, idx) => (
                     <tr key={r.matricule}>
-                      <td style={{ color: '#94a3b8', fontSize: 12 }}>{idx + 1}</td>
+                      <td style={{ color: '#94a3b8', fontSize: 13 }}>{idx + 1}</td>
                       <td><span className="badge badge-info">{r.matricule}</span></td>
                       <td style={{ fontWeight: 500 }}>{r.nom}</td>
                       <td>{r.prenom}</td>
@@ -196,7 +196,7 @@ export default function PointageTab() {
                             color:      r.present ? '#16a34a' : '#dc2626',
                             border: `1px solid ${r.present ? '#86efac' : '#fca5a5'}`,
                             borderRadius: 20, padding: '4px 14px',
-                            fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                            fontSize: 13, fontWeight: 600, cursor: 'pointer',
                             transition: 'all 0.15s',
                           }}
                         >
@@ -216,14 +216,14 @@ export default function PointageTab() {
         {searched && !loading && rows.length === 0 && (
           <div className="empty-state">
             <div style={{ color: '#cbd5e1', marginBottom: 12 }}><IcoClipboard /></div>
-            <p style={{ color: '#94a3b8', fontSize: 13 }}>Aucun étudiant trouvé pour cette session</p>
+            <p style={{ color: '#94a3b8', fontSize: 14 }}>Aucun étudiant trouvé pour cette session</p>
           </div>
         )}
 
         {!searched && (
           <div className="empty-state">
             <div style={{ color: '#cbd5e1', marginBottom: 12 }}><IcoClipboard /></div>
-            <p style={{ color: '#94a3b8', fontSize: 13 }}>
+            <p style={{ color: '#94a3b8', fontSize: 14 }}>
               Sélectionnez une session et cliquez sur <b>Afficher</b>
             </p>
           </div>

@@ -143,7 +143,7 @@ function DetailModal({ title, rows, onClose }: { title: string; rows: [string, s
           <span style={{ fontWeight:700, fontSize:16 }}>{title}</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:13 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:14 }}>
           {rows.map(([label, val]) => (
             <div key={label} style={{ display:'contents' }}>
               <span style={{ color:'#64748b' }}>{label} :</span>
@@ -321,9 +321,9 @@ export default function LogistiquePage() {
 
   const montantCalc = (Number(parseMontantInput(formA.prix_unitaire))||0) * (Number(formA.quantite)||0)
 
-  const fltSelect: React.CSSProperties = { padding:'7px 10px', border:'1px solid #e2e8f0', borderRadius:7, fontSize:12, fontFamily:'inherit', background:'white' }
-  const fltInput:  React.CSSProperties = { padding:'7px 10px', border:'1px solid #e2e8f0', borderRadius:7, fontSize:12, fontFamily:'inherit' }
-  const btnReset:  React.CSSProperties = { padding:'7px 10px', border:'1px solid #fca5a5', borderRadius:7, fontSize:12, fontFamily:'inherit', background:'#fff1f2', color:'#ef4444', cursor:'pointer', fontWeight:600 }
+  const fltSelect: React.CSSProperties = { padding:'7px 10px', border:'1px solid #e2e8f0', borderRadius:7, fontSize:13, fontFamily:'inherit', background:'white' }
+  const fltInput:  React.CSSProperties = { padding:'7px 10px', border:'1px solid #e2e8f0', borderRadius:7, fontSize:13, fontFamily:'inherit' }
+  const btnReset:  React.CSSProperties = { padding:'7px 10px', border:'1px solid #fca5a5', borderRadius:7, fontSize:13, fontFamily:'inherit', background:'#fff1f2', color:'#ef4444', cursor:'pointer', fontWeight:600 }
 
   const chargeLabel = [moisFilter !== '0' ? MOIS[Number(moisFilter)] : '', anneeFilter].filter(Boolean).join(' ')
   const achatLabel  = [achatMois !== '0' ? MOIS[Number(achatMois)] : '', achatAnnee, achatDateDebut && achatDateFin ? `${achatDateDebut} → ${achatDateFin}` : achatDateDebut || achatDateFin].filter(Boolean).join(' | ')
@@ -349,7 +349,7 @@ export default function LogistiquePage() {
           <div style={{ display:'flex', gap:4, background:'#f8fafc', borderRadius:11, padding:4, border:'1px solid #e2e8f0' }}>
             {navItems.map(m => (
               <button key={m.t} onClick={() => setTab(m.t)}
-                style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 18px', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit', border:'none', background:tab===m.t?'linear-gradient(135deg,#1e40af,#2563eb)':'transparent', color:tab===m.t?'white':'#64748b', transition:'all 0.15s' }}>
+                style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 18px', borderRadius:8, fontSize:14, fontWeight:600, cursor:'pointer', fontFamily:'inherit', border:'none', background:tab===m.t?'linear-gradient(135deg,#1e40af,#2563eb)':'transparent', color:tab===m.t?'white':'#64748b', transition:'all 0.15s' }}>
                 {m.icon}{m.label}
               </button>
             ))}
@@ -390,7 +390,7 @@ export default function LogistiquePage() {
                     </div>
                   </div>
                   {montantCalc > 0 && (
-                    <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:7, padding:'8px 12px', fontSize:13, color:'#1d4ed8', fontWeight:600, marginBottom:14 }}>
+                    <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:7, padding:'8px 12px', fontSize:14, color:'#1d4ed8', fontWeight:600, marginBottom:14 }}>
                       Montant : {fmt(montantCalc)} Ar
                     </div>
                   )}
@@ -431,7 +431,7 @@ export default function LogistiquePage() {
                 <input type="number" placeholder="Année" value={achatAnnee} min="2000" max="2100"
                   onChange={e => { setAchatAnnee(e.target.value); applyAchatFilters(achatMois, e.target.value, achatDateDebut, achatDateFin) }}
                   style={{ ...fltInput, width:75 }} />
-                <span style={{ color:'#cbd5e1', fontSize:11, fontWeight:600 }}>ou période</span>
+                <span style={{ color:'#cbd5e1', fontSize:12, fontWeight:600 }}>ou période</span>
                 <input type="date" value={achatDateDebut}
                   onChange={e => { setAchatDateDebut(e.target.value); applyAchatFilters(achatMois, achatAnnee, e.target.value, achatDateFin) }}
                   style={fltInput} title="Date début" />
@@ -439,7 +439,7 @@ export default function LogistiquePage() {
                   onChange={e => { setAchatDateFin(e.target.value); applyAchatFilters(achatMois, achatAnnee, achatDateDebut, e.target.value) }}
                   style={fltInput} title="Date fin" />
                 {achatFiltered && <button onClick={resetAchatFilters} style={btnReset}>✕ Reset</button>}
-                <button onClick={exportAchats} disabled={exportEnCours} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, background:'#f0fdf4', color:'#16a34a', border:'1px solid #bbf7d0', borderRadius:7, padding:'7px 12px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoExport /> Export</button>
+                <button onClick={exportAchats} disabled={exportEnCours} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, background:'#f0fdf4', color:'#16a34a', border:'1px solid #bbf7d0', borderRadius:7, padding:'7px 12px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoExport /> Export</button>
               </div>
 
               <div className="table-wrapper">
@@ -448,15 +448,15 @@ export default function LogistiquePage() {
                     <thead><tr><th>#</th><th>Matériel</th><th>Prix unit.</th><th>Qté</th><th>Montant</th><th>Date</th>{suiviActif && <th>Statut</th>}<th>Action</th></tr></thead>
                     <tbody>
                       {achatTable.data.length === 0
-                        ? <tr><td colSpan={suiviActif ? 8 : 7} style={{ textAlign:'center', padding:40, color:'#94a3b8', fontSize:13 }}>Aucun achat</td></tr>
+                        ? <tr><td colSpan={suiviActif ? 8 : 7} style={{ textAlign:'center', padding:40, color:'#94a3b8', fontSize:14 }}>Aucun achat</td></tr>
                         : achatTable.data.map((a, i) => (
                           <tr key={a.id_achat} onClick={() => setViewingAchat(a)} style={{ cursor:'pointer' }}>
-                            <td style={{ color:'#94a3b8', fontSize:12 }}>{(achatTable.meta.current_page-1)*achatTable.meta.per_page+i+1}</td>
+                            <td style={{ color:'#94a3b8', fontSize:13 }}>{(achatTable.meta.current_page-1)*achatTable.meta.per_page+i+1}</td>
                             <td style={{ fontWeight:600 }}>{a.nom_materiel}</td>
                             <td style={{ color:'#64748b' }}>{fmt(a.prix_unitaire)} Ar</td>
                             <td><span className="badge badge-info">{a.quantite}</span></td>
                             <td style={{ fontWeight:700, color:'var(--accent)' }}>{fmt(a.montant)} Ar</td>
-                            <td style={{ fontSize:12, color:'#64748b' }}>{String(a.date_achat).slice(0,10)}</td>{suiviActif && <td><StatutBadge depense={a} /></td>}
+                            <td style={{ fontSize:13, color:'#64748b' }}>{String(a.date_achat).slice(0,10)}</td>{suiviActif && <td><StatutBadge depense={a} /></td>}
                             <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                               {(!suiviActif || modifiable(a)) && <button className="btn-icon edit" onClick={() => editAchat(a)}><IcoEdit /></button>}
                               {isAdmin() && (!suiviActif || supprimable(a)) && <button className="btn-icon delete" onClick={() => askDeleteAchat(a)}><IcoTrash /></button>}{suiviActif && <ActionsSuivi type="achat" id={a.id_achat} libelle={a.nom_materiel} montant={a.montant} depense={a} onFait={achatTable.reload} />}
@@ -547,7 +547,7 @@ export default function LogistiquePage() {
                   onChange={e => { setAnneeFilter(e.target.value); applyChargeFilters(moisFilter, e.target.value) }}
                   style={{ ...fltInput, width:75 }} />
                 {(moisFilter !== '0' || anneeFilter !== '') && <button onClick={resetChargeFilters} style={btnReset}>✕ Reset</button>}
-                <button onClick={exportCharges} disabled={exportEnCours} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, background:'#f0fdf4', color:'#16a34a', border:'1px solid #bbf7d0', borderRadius:7, padding:'7px 12px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoExport /> Export</button>
+                <button onClick={exportCharges} disabled={exportEnCours} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, background:'#f0fdf4', color:'#16a34a', border:'1px solid #bbf7d0', borderRadius:7, padding:'7px 12px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoExport /> Export</button>
               </div>
 
               <div className="table-wrapper">
@@ -556,15 +556,15 @@ export default function LogistiquePage() {
                     <thead><tr><th>#</th><th>Désignation</th><th>Montant</th><th>Mois</th><th>Année</th><th>Date</th>{suiviActif && <th>Statut</th>}<th>Action</th></tr></thead>
                     <tbody>
                       {chargeTable.data.length === 0
-                        ? <tr><td colSpan={suiviActif ? 8 : 7} style={{ textAlign:'center', padding:40, color:'#94a3b8', fontSize:13 }}>Aucune charge</td></tr>
+                        ? <tr><td colSpan={suiviActif ? 8 : 7} style={{ textAlign:'center', padding:40, color:'#94a3b8', fontSize:14 }}>Aucune charge</td></tr>
                         : chargeTable.data.map((c, i) => (
                           <tr key={c.id_charge} onClick={() => setViewingCharge(c)} style={{ cursor:'pointer' }}>
-                            <td style={{ color:'#94a3b8', fontSize:12 }}>{(chargeTable.meta.current_page-1)*chargeTable.meta.per_page+i+1}</td>
+                            <td style={{ color:'#94a3b8', fontSize:13 }}>{(chargeTable.meta.current_page-1)*chargeTable.meta.per_page+i+1}</td>
                             <td style={{ fontWeight:600 }}>{c.designation}</td>
                             <td style={{ fontWeight:700, color:'var(--danger)' }}>{fmt(c.montant)} Ar</td>
-                            <td style={{ fontSize:12 }}>{MOIS[c.mois]}</td>
-                            <td style={{ fontSize:12, color:'#64748b' }}>{c.annee}</td>
-                            <td style={{ fontSize:12, color:'#64748b' }}>{String(c.date).slice(0,10)}</td>{suiviActif && <td><StatutBadge depense={c} /></td>}
+                            <td style={{ fontSize:13 }}>{MOIS[c.mois]}</td>
+                            <td style={{ fontSize:13, color:'#64748b' }}>{c.annee}</td>
+                            <td style={{ fontSize:13, color:'#64748b' }}>{String(c.date).slice(0,10)}</td>{suiviActif && <td><StatutBadge depense={c} /></td>}
                             <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                               {(!suiviActif || modifiable(c)) && <button className="btn-icon edit" onClick={() => editCharge(c)}><IcoEdit /></button>}
                               {isAdmin() && (!suiviActif || supprimable(c)) && <button className="btn-icon delete" onClick={() => askDeleteCharge(c)}><IcoTrash /></button>}{suiviActif && <ActionsSuivi type="charge" id={c.id_charge} libelle={c.designation} montant={c.montant} depense={c} onFait={chargeTable.reload} />}

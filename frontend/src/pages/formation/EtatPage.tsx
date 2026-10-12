@@ -231,7 +231,7 @@ export default function EtatPage() {
               <div className="card-header">
                 <div>
                   <span className="card-title">Dernières inscriptions</span>
-                  <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>Activité récente du centre</p>
+                  <p style={{ fontSize: 13, color: '#94a3b8', marginTop: 2 }}>Activité récente du centre</p>
                 </div>
                 <span className="badge badge-info">
                   {inscriptions.length} enregistrement{inscriptions.length !== 1 ? 's' : ''}
@@ -259,11 +259,11 @@ export default function EtatPage() {
                       </tr>
                     ) : inscriptions.map((ins, idx) => (
                       <tr key={ins.id_paiement}>
-                        <td style={{ color: '#94a3b8', fontSize: 12 }}>{idx + 1}</td>
+                        <td style={{ color: '#94a3b8', fontSize: 13 }}>{idx + 1}</td>
                         <td><span className="badge badge-info">{ins.matricule}</span></td>
                         <td style={{ fontWeight: 600, color: '#1e293b' }}>{ins.nom_complet}</td>
-                        <td style={{ fontSize: 12, color: '#64748b' }}>{ins.code_session}</td>
-                        <td style={{ fontSize: 12 }}>{ins.date_paiement}</td>
+                        <td style={{ fontSize: 13, color: '#64748b' }}>{ins.code_session}</td>
+                        <td style={{ fontSize: 13 }}>{ins.date_paiement}</td>
                         <td style={{ fontWeight: 700, color: '#16a34a' }}>{fmt(Number(ins.montant_paye))} Ar</td>
                         <td>
                           <span className={`badge ${Number(ins.reste) === 0 ? 'badge-success' : 'badge-danger'}`}>
@@ -357,7 +357,7 @@ export default function EtatPage() {
                 <IcoMoney />
               </div>
               <div>
-                <p style={{ fontSize: 12, color: '#64748b', marginBottom: 2 }}>Montant perçu total (toute la sélection)</p>
+                <p style={{ fontSize: 13, color: '#64748b', marginBottom: 2 }}>Montant perçu total (toute la sélection)</p>
                 <p style={{ fontSize: 24, fontWeight: 800, color: '#16a34a' }}>{fmt(totalMontant)} Ar</p>
               </div>
               <div style={{ marginLeft: 'auto' }}>
@@ -403,18 +403,18 @@ export default function EtatPage() {
                       </tr>
                     ) : rows.map((r, i) => (
                       <tr key={r.id_paiement}>
-                        <td style={{ color: '#94a3b8', fontSize: 12 }}>
+                        <td style={{ color: '#94a3b8', fontSize: 13 }}>
                           {(meta.current_page - 1) * meta.per_page + i + 1}
                         </td>
-                        <td style={{ fontSize: 12 }}>{r.date_transaction}</td>
+                        <td style={{ fontSize: 13 }}>{r.date_transaction}</td>
                         <td><span className="badge badge-info">{r.matricule}</span></td>
                         <td style={{ fontWeight: 500 }}>{r.nom}</td>
                         <td>{r.prenom}</td>
-                        <td style={{ fontSize: 12, color: '#64748b' }}>{r.code_session}</td>
+                        <td style={{ fontSize: 13, color: '#64748b' }}>{r.code_session}</td>
                         <td style={{ fontWeight: 700, color: '#16a34a' }}>{fmt(r.montant)} Ar</td>
-                        <td style={{ fontSize: 12 }}>{r.type_paiement}</td>
-                        <td style={{ fontSize: 12 }}>{r.lieu_paiement}</td>
-                        <td style={{ fontSize: 11, color: '#64748b' }}>{r.editeur}</td>
+                        <td style={{ fontSize: 13 }}>{r.type_paiement}</td>
+                        <td style={{ fontSize: 13 }}>{r.lieu_paiement}</td>
+                        <td style={{ fontSize: 12, color: '#64748b' }}>{r.editeur}</td>
                       </tr>
                     ))}
                   </tbody>

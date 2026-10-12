@@ -19,7 +19,7 @@ function EditeurPopover({ editeur, onClose }: { editeur: string; onClose: () => 
           <span style={{ fontWeight:700, fontSize:14 }}>Éditeur</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ fontSize:13, color:'#334155' }}>{editeur?.trim() || 'Non renseigné'}</div>
+        <div style={{ fontSize:14, color:'#334155' }}>{editeur?.trim() || 'Non renseigné'}</div>
       </div>
     </div>
   )
@@ -126,8 +126,8 @@ export default function CompteTab() {
                   <tr><td colSpan={5}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucun compte'}</div></td></tr>
                 ) : table.data.map((c, idx) => (
                   <tr key={c.id_compte}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{c.account_number}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{c.account_number}</td>
                     <td style={{ fontWeight:600 }}>{c.libelle}</td>
                     <td style={{ fontWeight:600, color:'#16a34a' }}>{fmt(c.montant)} Ar</td>
                     <td><div className="table-actions">

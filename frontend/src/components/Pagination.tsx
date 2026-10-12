@@ -62,7 +62,7 @@ export default function Pagination({
     background:     active ? '#1e40af' : 'white',
     color:          active ? 'white' : disabled ? '#cbd5e1' : '#374151',
     fontWeight:     active ? 700 : 500,
-    fontSize:       13,
+    fontSize:       14,
     fontFamily:     'inherit',
     cursor:         disabled ? 'not-allowed' : 'pointer',
     opacity:        disabled ? 0.5 : 1,
@@ -84,7 +84,7 @@ export default function Pagination({
 
       {/* Gauche : résultats + lignes/page */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 12, color: '#64748b' }}>
+        <span style={{ fontSize: 13, color: '#64748b' }}>
           <b style={{ color: '#1e293b' }}>{from}</b>–<b style={{ color: '#1e293b' }}>{to}</b>
           {' '}sur <b style={{ color: '#1e293b' }}>{total}</b> résultats
         </span>
@@ -93,7 +93,7 @@ export default function Pagination({
           onChange={e => onPerPage(Number(e.target.value))}
           style={{
             padding: '4px 10px', border: '1px solid #e2e8f0',
-            borderRadius: 7, fontSize: 12, color: '#374151',
+            borderRadius: 7, fontSize: 13, color: '#374151',
             background: 'white', cursor: 'pointer',
             fontFamily: 'inherit', outline: 'none',
           }}
@@ -114,7 +114,7 @@ export default function Pagination({
           style={btnStyle(false, !canPrev)}
         >
           <IcoChevronLeft />
-          <span style={{ marginLeft: 4, fontSize: 12 }}>Préc.</span>
+          <span style={{ marginLeft: 4, fontSize: 13 }}>Préc.</span>
         </button>
 
         {/* Numéros de pages */}
@@ -122,7 +122,7 @@ export default function Pagination({
           p === '...' ? (
             <span key={`dot-${i}`} style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              minWidth: 24, height: 34, color: '#94a3b8', fontSize: 13,
+              minWidth: 24, height: 34, color: '#94a3b8', fontSize: 14,
             }}>…</span>
           ) : (
             <button
@@ -141,7 +141,7 @@ export default function Pagination({
           onClick={() => canNext && onPage(current_page + 1)}
           style={btnStyle(false, !canNext)}
         >
-          <span style={{ marginRight: 4, fontSize: 12 }}>Suiv.</span>
+          <span style={{ marginRight: 4, fontSize: 13 }}>Suiv.</span>
           <IcoChevronRight />
         </button>
 

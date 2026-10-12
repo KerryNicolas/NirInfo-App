@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
+import Avatar from '../components/Avatar'
 import { IconEyeOff, IconEye, IconUser, IconMail, IconPhone, IconSave, IconLock, IcoUsers } from '.././components/icons'
 
 // FIX : flèche retour — même dessin que celui utilisé dans Sidebar.tsx pour
@@ -111,7 +112,7 @@ export default function ProfilePage() {
         style={{
           display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16,
           background: 'none', border: 'none', cursor: 'pointer',
-          color: '#2563eb', fontSize: 13, fontWeight: 600, padding: 0,
+          color: '#2563eb', fontSize: 14, fontWeight: 600, padding: 0,
         }}
       >
         <SvgArrowLeft /> Retour
@@ -120,27 +121,24 @@ export default function ProfilePage() {
       {/* ── En-tête profil ── */}
       <div className="card" style={{ marginBottom: 20, padding: '24px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <div style={{
-            width: 68, height: 68, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #3b82f6, #1e3a8a)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'white', fontSize: 22, fontWeight: 700, flexShrink: 0,
-          }}>
-            {initials}
-          </div>
+          <Avatar name={user?.name} photoUrl={user?.photo_url} size={68} />
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
               {user?.name}
             </h2>
-            <p style={{ color: '#64748b', fontSize: 13, marginBottom: 6 }}>{user?.email}</p>
+            <p style={{ color: '#64748b', fontSize: 14, marginBottom: 6 }}>{user?.email}</p>
             <span style={{
               display: 'inline-block', padding: '2px 10px',
-              background: user?.role === 'admin' ? '#eff6ff' : '#f0fdf4',
-              color:      user?.role === 'admin' ? '#1d4ed8' : '#15803d',
-              border: `1px solid ${user?.role === 'admin' ? '#bfdbfe' : '#bbf7d0'}`,
-              borderRadius: 20, fontSize: 11.5, fontWeight: 600,
+              background: isAdmin() ? '#eff6ff' : '#f0fdf4',
+              color:      isAdmin() ? '#1d4ed8' : '#15803d',
+              border: `1px solid ${isAdmin() ? '#bfdbfe' : '#bbf7d0'}`,
+              borderRadius: 20, fontSize: 12.5, fontWeight: 600,
             }}>
-              {user?.role === 'admin' ? 'Administrateur' : 'Gestionnaire'}
+              {/* Rôle réel (role_slug) — l'ancienne colonne "role" vaut
+                  "gestionnaire" pour tous les comptes, admins compris. */}
+              {user?.role_slug === 'super-admin' ? 'Administrateur principal'
+                : user?.role_slug === 'admin'    ? 'Administrateur'
+                : 'Gestionnaire'}
             </span>
           </div>
 
@@ -159,7 +157,7 @@ export default function ProfilePage() {
 
           {user?.matricule && (
             <div style={{ marginLeft: isAdmin() ? 16 : 'auto', textAlign: 'right' }}>
-              <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>Matricule</p>
+              <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 2 }}>Matricule</p>
               <p style={{ fontSize: 15, fontWeight: 700, color: '#1e3a8a' }}>{user.matricule}</p>
             </div>
           )}
@@ -284,7 +282,7 @@ export default function ProfilePage() {
               />
 
               {confirmPwd && newPwd !== confirmPwd && (
-                <p style={{ color: '#ef4444', fontSize: 12, marginTop: -8, marginBottom: 10 }}>
+                <p style={{ color: '#ef4444', fontSize: 13, marginTop: -8, marginBottom: 10 }}>
                   Les mots de passe ne correspondent pas
                 </p>
               )}

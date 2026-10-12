@@ -45,8 +45,32 @@ class User extends Authenticatable
         return $this->belongsTo(\App\Models\Role::class, 'role_id');
     }
 
+    /**
+     * Administrateur principal : seul rôle autorisé à gérer les modules. Il
+     * ne s'attribue ni par l'interface ni par l'API (createUser le refuse),
+     * uniquement par la commande app:promouvoir-super-admin.
+     */
+    public const ROLE_SUPER_ADMIN = 'super-admin';
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->roleRelation?->slug === self::ROLE_SUPER_ADMIN;
+    }
+
+    /** Administrateur au sens large : admin secondaire OU administrateur principal. */
+    public function isAdmin(): bool
+    {
+        return in_array($this->roleRelation?->slug, ['admin', self::ROLE_SUPER_ADMIN], true);
+    }
+
     public function hasPermission(string $slug): bool
     {
+        // L'administrateur principal a toutes les permissions par construction :
+        // une permission ajoutée plus tard au seul rôle admin ne peut pas lui manquer.
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
         return $this->roleRelation?->permissions()->where('slug', $slug)->exists() ?? false;
     }
 

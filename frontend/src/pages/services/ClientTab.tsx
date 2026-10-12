@@ -113,10 +113,10 @@ export default function ClientTab() {
                   <tr><td colSpan={5}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucun client'}</div></td></tr>
                 ) : table.data.map((c, idx) => (
                   <tr key={c.id_client}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
                     <td style={{ fontWeight:600 }}>{c.client_name}</td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{c.client_contact || '—'}</td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{c.client_adresse || '—'}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{c.client_contact || '—'}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{c.client_adresse || '—'}</td>
                     <td><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(c)}><IcoEdit /></button>
                       {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(c.id_client)}><IcoTrash /></button>}

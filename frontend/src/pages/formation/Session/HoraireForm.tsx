@@ -19,7 +19,7 @@ function EditeurPopover({ editeur, onClose }: { editeur: string; onClose: () => 
           <span style={{ fontWeight:700, fontSize:14 }}>Éditeur</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ fontSize:13, color:'#334155' }}>{editeur?.trim() || 'Non renseigné'}</div>
+        <div style={{ fontSize:14, color:'#334155' }}>{editeur?.trim() || 'Non renseigné'}</div>
       </div>
     </div>
   )
@@ -122,11 +122,11 @@ export default function HoraireForm() {
                   <tr><td colSpan={6}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucun horaire trouvé'}</div></td></tr>
                 ) : table.data.map((h, idx) => (
                   <tr key={h.code_horaire}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
                     <td><span className="badge badge-info">{h.code_horaire}</span></td>
                     <td style={{ fontWeight:600 }}>{h.designation}</td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{h.horaire || '—'}</td>
-                    <td style={{ fontSize:12 }}>{h.remarque || '—'}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{h.horaire || '—'}</td>
+                    <td style={{ fontSize:13 }}>{h.remarque || '—'}</td>
                     <td><div className="table-actions">
                       <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(h.editeur)}><IcoInfo /></button>
                       <button className="btn-icon edit" onClick={() => handleEdit(h)}><IcoEdit /></button>

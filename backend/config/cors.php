@@ -19,7 +19,9 @@ return [
     ))),
     'allowed_origins_patterns' => [],
     'allowed_headers'      => ['*'],
-    'exposed_headers'      => [],
+    // Lisible par le frontend (autre port que l'API) : identité de la session
+    // qui a produit la réponse — voir App\Http\Middleware\IdentiteDeLaReponse.
+    'exposed_headers'      => ['X-Utilisateur'],
     'max_age'              => 0,
     // FIX : doit être true — indispensable pour que le navigateur envoie/accepte
     // le cookie de session cross-port (localhost:5173 -> localhost:8000).

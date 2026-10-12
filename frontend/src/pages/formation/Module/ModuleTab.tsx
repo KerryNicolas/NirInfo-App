@@ -21,7 +21,7 @@ function EditeurPopover({ editeur, onClose }: { editeur: string; onClose: () => 
           <span style={{ fontWeight:700, fontSize:14 }}>Éditeur</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ fontSize:13, color:'#334155' }}>{editeur?.trim() || 'Non renseigné'}</div>
+        <div style={{ fontSize:14, color:'#334155' }}>{editeur?.trim() || 'Non renseigné'}</div>
       </div>
     </div>
   )
@@ -137,12 +137,12 @@ export default function ModuleTab() {
                         outline: editing?.code_module === m.code_module ? '2px solid #3b82f6' : undefined,
                       }}
                     >
-                      <td style={{ color: '#94a3b8', fontSize: 12 }}>
+                      <td style={{ color: '#94a3b8', fontSize: 13 }}>
                         {(table.meta.current_page - 1) * table.meta.per_page + idx + 1}
                       </td>
                       <td><span className="badge badge-info">{m.code_module}</span></td>
                       <td style={{ fontWeight: 600 }}>{m.nom}</td>
-                      <td style={{ fontSize: 12, color: '#64748b' }}>{m.description || '—'}</td>
+                      <td style={{ fontSize: 13, color: '#64748b' }}>{m.description || '—'}</td>
                       <td onClick={e => e.stopPropagation()}>
                         <div className="table-actions">
                           <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(m.editeur)}><IcoInfo /></button>

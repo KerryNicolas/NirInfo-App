@@ -85,7 +85,7 @@ export default function ServiceCatalogTab() {
                   <tr><td colSpan={3}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucun service'}</div></td></tr>
                 ) : table.data.map((s, idx) => (
                   <tr key={s.id_services}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
                     <td style={{ fontWeight:600 }}>{s.service_name}</td>
                     <td><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(s)}><IcoEdit /></button>

@@ -48,6 +48,8 @@ class AdminOnlyDeleteTest extends TestCase
     {
         $this->actingAs($this->admin());
 
-        $this->assertNotSame(403, $this->deleteJson('/api/modules/INEXISTANT')->getStatusCode());
+        // Pas un module : leur gestion est réservée à l'administrateur
+        // principal (cf. ModulesSuperAdminTest).
+        $this->assertNotSame(403, $this->deleteJson('/api/horaires/INEXISTANT')->getStatusCode());
     }
 }

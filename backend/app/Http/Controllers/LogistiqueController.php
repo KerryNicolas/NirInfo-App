@@ -453,7 +453,7 @@ class LogistiqueController extends BaseApiController
     /** Rôle admin — même critère que AdminOnlyDelete et AuthController::createUser. */
     private function estAdmin(): bool
     {
-        return auth()->user()?->roleRelation?->slug === 'admin';
+        return (bool) auth()->user()?->isAdmin();
     }
 
     /** Réponse des nouvelles routes quand le suivi des dépenses est désactivé. */

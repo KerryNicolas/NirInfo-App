@@ -35,7 +35,7 @@ function DetailModalFonction({ f, onClose }: { f: Fonction; onClose: () => void 
           <span style={{ fontWeight:700, fontSize:16 }}>Détail de la fonction</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:13 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:14 }}>
           {rows.map(([label, val]) => (
             <div key={label} style={{ display:'contents' }}>
               <span style={{ color:'#64748b' }}>{label} :</span>
@@ -125,9 +125,9 @@ export default function FonctionTab() {
                   <tr><td colSpan={4}><div className="empty-state">{fonctionTable.search ? `Aucun résultat pour « ${fonctionTable.search} »` : 'Aucune fonction créée'}</div></td></tr>
                 ) : fonctionTable.data.map((f, i) => (
                   <tr key={f.id_fonction} onClick={() => setViewingF(f)} style={{ cursor:'pointer' }}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(fonctionTable.meta.current_page-1)*fonctionTable.meta.per_page+i+1}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(fonctionTable.meta.current_page-1)*fonctionTable.meta.per_page+i+1}</td>
                     <td style={{ fontWeight:600 }}>{f.nom_fonction}</td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{f.description_fonction || '—'}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{f.description_fonction || '—'}</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => { setEditF(f); setFormF({ nom_fonction:f.nom_fonction, description_fonction:f.description_fonction??'' }); window.scrollTo({top:0,behavior:'smooth'}) }}><IcoEdit /></button>
                       {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteFonctionId(f.id_fonction)}><IcoTrash /></button>}

@@ -150,7 +150,7 @@ export default function CertificationAuto({ onEditManuel }: { onEditManuel?: (c:
         </div>
         <div className="card-body">
           {editing && isValide(editing.accept) && (
-            <div style={{ background:'#fffbeb', border:'1px solid #fde68a', borderRadius:7, padding:'8px 12px', fontSize:12.5, color:'#92400e', marginBottom:14 }}>
+            <div style={{ background:'#fffbeb', border:'1px solid #fde68a', borderRadius:7, padding:'8px 12px', fontSize:13.5, color:'#92400e', marginBottom:14 }}>
               Ce certificat est déjà validé. Si vous changez le prix, la transaction et le solde du compte déjà enregistrés seront automatiquement ajustés.
             </div>
           )}
@@ -177,15 +177,15 @@ export default function CertificationAuto({ onEditManuel }: { onEditManuel?: (c:
                   ))}
                 </datalist>
                 {checkingMatricule && (
-                  <div style={{ fontSize:12, color:'#94a3b8', marginTop:4 }}>Vérification...</div>
+                  <div style={{ fontSize:13, color:'#94a3b8', marginTop:4 }}>Vérification...</div>
                 )}
                 {!checkingMatricule && etudiantInfo && (
-                  <div style={{ fontSize:13, color:'#16a34a', marginTop:4, fontWeight:600 }}>
+                  <div style={{ fontSize:14, color:'#16a34a', marginTop:4, fontWeight:600 }}>
                     ✓ {etudiantInfo.nom} {etudiantInfo.prenom}
                   </div>
                 )}
                 {!checkingMatricule && !etudiantInfo && form.matricule.length >= 5 && (
-                  <div style={{ fontSize:13, color:'#dc2626', marginTop:4 }}>
+                  <div style={{ fontSize:14, color:'#dc2626', marginTop:4 }}>
                     ✗ Étudiant non trouvé — créez d'abord la fiche étudiant
                   </div>
                 )}
@@ -288,16 +288,16 @@ export default function CertificationAuto({ onEditManuel }: { onEditManuel?: (c:
                   ? <tr><td colSpan={10}><div className="empty-state">Aucune certification trouvée</div></td></tr>
                   : certifTable.data.map((c: Certification, idx: number) => (
                     <tr key={c.reference}>
-                      <td style={{ color:'#94a3b8', fontSize:12 }}>{(certifTable.meta.current_page-1)*certifTable.meta.per_page+idx+1}</td>
-                      <td style={{ fontWeight:600, color:'#2563eb', fontSize:12 }}>{c.reference}</td>
+                      <td style={{ color:'#94a3b8', fontSize:13 }}>{(certifTable.meta.current_page-1)*certifTable.meta.per_page+idx+1}</td>
+                      <td style={{ fontWeight:600, color:'#2563eb', fontSize:13 }}>{c.reference}</td>
                       <td>
                         <div style={{ fontWeight:600 }}>{c.nom_complet?.trim() || `${c.nom || ''} ${c.prenom || ''}`.trim() || '—'}</div>
-                        <div style={{ fontSize:11, color:'#94a3b8' }}>{c.matricule || (isManuel(c) ? 'Saisie manuelle' : '')}</div>
+                        <div style={{ fontSize:12, color:'#94a3b8' }}>{c.matricule || (isManuel(c) ? 'Saisie manuelle' : '')}</div>
                       </td>
                       <td><span className="badge badge-warning">{c.module_nom}</span></td>
-                      <td style={{ fontSize:12 }}>{fmtDateCourt(c.debut_session)}</td>
-                      <td style={{ fontSize:12 }}>{fmtDateCourt(c.fin_session)}</td>
-                      <td style={{ fontWeight:600, color:'#16a34a', fontSize:12 }}>
+                      <td style={{ fontSize:13 }}>{fmtDateCourt(c.debut_session)}</td>
+                      <td style={{ fontSize:13 }}>{fmtDateCourt(c.fin_session)}</td>
+                      <td style={{ fontWeight:600, color:'#16a34a', fontSize:13 }}>
                         {isGratuit(c)
                           ? <span className="badge badge-warning" title={c.motif_gratuit || undefined}>Gratuit</span>
                           : Number(c.prix) > 0 ? fmtMontant(c.prix)+' Ar' : '—'}

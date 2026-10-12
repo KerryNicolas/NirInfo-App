@@ -47,7 +47,7 @@ function DetailModal({ r, onClose }: { r: Recouvrement; onClose: () => void }) {
           <span style={{ fontWeight:700, fontSize:16 }}>Détail du recouvrement</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:13 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:14 }}>
           {rows.map(([label, val]) => (
             <div key={label} style={{ display:'contents' }}>
               <span style={{ color:'#64748b' }}>{label} :</span>
@@ -288,16 +288,16 @@ export default function RecouvrementTab() {
                   <tr><td colSpan={8}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucun recouvrement'}</div></td></tr>
                 ) : table.data.map((r, idx) => (
                   <tr key={r.id_recouvrement} onClick={() => setViewing(r)} style={{ cursor: 'pointer' }}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
                     <td>
                       <div style={{ fontWeight:600 }}>{r.nom} {r.prenom}</div>
-                      <div style={{ fontSize:11, color:'#94a3b8' }}>{r.matricule.toUpperCase()}</div>
+                      <div style={{ fontSize:12, color:'#94a3b8' }}>{r.matricule.toUpperCase()}</div>
                     </td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{r.code_session}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{r.code_session}</td>
                     <td style={{ fontWeight:600, color:'#16a34a' }}>{fmt(Number(r.montant_paye))} Ar</td>
                     <td><span className={`badge ${Number(r.reste) === 0 ? 'badge-success' : 'badge-danger'}`}>{fmt(Number(r.reste))} Ar</span></td>
-                    <td style={{ fontSize:11, color:'#2563eb', fontWeight:600 }}>{r.ref_facture || '—'}</td>
-                    <td style={{ fontSize:12 }}>{r.date_paiement}</td>
+                    <td style={{ fontSize:12, color:'#2563eb', fontWeight:600 }}>{r.ref_facture || '—'}</td>
+                    <td style={{ fontSize:13 }}>{r.date_paiement}</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(r)}><IcoEdit /></button>
                       {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteId(r.id_recouvrement)}><IcoTrash /></button>}

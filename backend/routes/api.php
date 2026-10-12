@@ -44,9 +44,17 @@ Route::middleware(['auth:sanctum', 'admin.delete'])->group(function () {
     Route::get ('/user',    [AuthController::class, 'me']);
     Route::post('/logout',  [AuthController::class, 'logout']);
     Route::put ('/profile', [AuthController::class, 'updateProfile']);
+    // Photo de profil : chacun ne gère que la sienne (pas d'identifiant dans
+    // l'adresse). Le retrait passe par POST : les requêtes DELETE sont
+    // réservées aux administrateurs (admin.delete).
+    Route::post('/profile/photo',         [AuthController::class, 'uploadPhoto']);
+    Route::post('/profile/photo/retirer', [AuthController::class, 'removePhoto']);
     Route::post('/users',   [AuthController::class, 'createUser']);
+    // Le rôle d'administrateur principal n'est pas proposé : il ne
+    // s'attribue pas par l'interface (createUser le refuse aussi).
     Route::get ('/roles',   fn() => response()->json(
-        \Illuminate\Support\Facades\DB::table('roles')->select('id', 'name', 'slug')->get()
+        \Illuminate\Support\Facades\DB::table('roles')->select('id', 'name', 'slug')
+            ->where('slug', '!=', \App\Models\User::ROLE_SUPER_ADMIN)->get()
     ));
 
     // Dashboard
@@ -54,7 +62,12 @@ Route::middleware(['auth:sanctum', 'admin.delete'])->group(function () {
     Route::get('/dashboard/charts', [DashboardController::class, 'charts']);
 
     // Formations
-    Route::apiResource('modules',  ModuleController::class);
+    // Modules : la lecture reste ouverte (autocomplétion des sessions, de
+    // l'état, des certifications) ; créer, modifier et supprimer sont
+    // réservés à l'administrateur principal (permission modules.manage).
+    Route::apiResource('modules',  ModuleController::class)->only(['index', 'show']);
+    Route::apiResource('modules',  ModuleController::class)->only(['store', 'update', 'destroy'])
+        ->middleware('permission:modules.manage');
     Route::apiResource('horaires', HoraireController::class);
     Route::get('/sessions/en-cours', [SessionController::class, 'enCours']);
     Route::apiResource('sessions',   SessionController::class);

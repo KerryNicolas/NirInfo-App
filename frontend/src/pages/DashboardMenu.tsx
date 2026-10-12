@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Logo from '../assets/logo.png'
+import ParametresModal from '../components/ParametresModal'
+import Avatar from '../components/Avatar'
 import { IcoLogoutRed, IcoSettings, IcoFormation, IcoTruck, IcoUsers, IcoServices, IcoBudget } from '.././components/icons'
 
 const baseMenuItems = [
@@ -27,9 +30,10 @@ interface Stats {
 export default function DashboardMenu() {
   const { user, logout, isAdmin } = useAuth()
   const navigate = useNavigate()
+  // « Paramètres » ouvre la fenêtre du profil par-dessus le menu, sans changer de page.
+  const [parametres, setParametres] = useState(false)
 
   const handleLogout = async () => { await logout(); navigate('/login') }
-  const initials = (user?.name || 'U').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
 
   // FIX : Services + Gestion des budgets ajoutés uniquement si admin
   const menuItems = isAdmin() ? [...baseMenuItems, ...adminOnlyMenuItems] : baseMenuItems
@@ -46,7 +50,11 @@ export default function DashboardMenu() {
           <span className="dash-topbar-greeting">
             Bonjour, <b>{user?.name}</b>
           </span>
-          <div className="dash-avatar">{initials}</div>
+          {/* La photo en haut ouvre la même fenêtre que le bouton « Paramètres ». */}
+          <button type="button" onClick={() => setParametres(true)} title="Paramètres" aria-label="Paramètres"
+            style={{ background: 'none', border: 'none', padding: 0, borderRadius: '50%', cursor: 'pointer', display: 'flex' }}>
+            <Avatar name={user?.name} photoUrl={user?.photo_url} size={38} />
+          </button>
           <button className="dash-btn-logout" onClick={handleLogout}>
             <IcoLogoutRed /> Déconnexion
           </button>
@@ -84,7 +92,7 @@ export default function DashboardMenu() {
 
           {/* Pied */}
           <div className="dash-menu-footer">
-            <button className="dash-btn-settings" onClick={() => navigate('/profile')}>
+            <button className="dash-btn-settings" onClick={() => setParametres(true)}>
               <IcoSettings /> Paramètres
             </button>
             <button className="dash-btn-logout-sm" onClick={handleLogout}>
@@ -94,6 +102,8 @@ export default function DashboardMenu() {
 
         </div>
       </div>
+
+      <ParametresModal open={parametres} onClose={() => setParametres(false)} />
 
     </div>
   )

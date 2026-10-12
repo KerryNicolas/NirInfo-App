@@ -36,7 +36,7 @@ function DetailModal({ r, onClose }: { r: Recouvrement; onClose: () => void }) {
           <span style={{ fontWeight:700, fontSize:16 }}>Détail du recouvrement</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:13 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:14 }}>
           {rows.map(([label, val]) => (
             <div key={label} style={{ display:'contents' }}>
               <span style={{ color:'#64748b' }}>{label} :</span>
@@ -219,12 +219,12 @@ export default function RecouvrementPrestationTab() {
                   <tr><td colSpan={7}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucun recouvrement'}</div></td></tr>
                 ) : table.data.map((r, idx) => (
                   <tr key={r.id_prestation} onClick={() => setViewing(r)} style={{ cursor:'pointer' }}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
                     <td style={{ fontWeight:600 }}>{r.client_name}</td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{r.service_name}</td>
-                    <td style={{ fontSize:12 }}>{r.benefit_date}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{r.service_name}</td>
+                    <td style={{ fontSize:13 }}>{r.benefit_date}</td>
                     <td style={{ fontWeight:600, color:'#16a34a' }}>{fmt(r.payroll_amount)} Ar</td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{r.account_number}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{r.account_number}</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       {/* FIX : bouton Modifier ajouté — manquait totalement */}
                       <button className="btn-icon edit" onClick={() => handleEdit(r)}><IcoEdit /></button>

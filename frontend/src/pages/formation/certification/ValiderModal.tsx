@@ -48,7 +48,7 @@ export default function ValiderModal({ certif, comptes, onClose, onConfirm }: {
         </div>
         <form onSubmit={submit}>
           {manuel && (
-            <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13.5, marginBottom:14, cursor:'pointer' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:14.5, marginBottom:14, cursor:'pointer' }}>
               <input type="checkbox" checked={gratuit} onChange={e => setGratuit(e.target.checked)} />
               Certificat gratuit (sans encaissement)
             </label>
@@ -58,7 +58,7 @@ export default function ValiderModal({ certif, comptes, onClose, onConfirm }: {
             <div className="form-group">
               <label className="form-label">Motif de la gratuité</label>
               <input className="form-control" value={motif} onChange={e => setMotif(e.target.value)} required maxLength={255} placeholder="Ex: Formateur interne, partenariat…" />
-              <div style={{ fontSize:12, color:'#94a3b8', marginTop:6 }}>
+              <div style={{ fontSize:13, color:'#94a3b8', marginTop:6 }}>
                 Aucun paiement ne sera enregistré dans les comptes.
               </div>
             </div>

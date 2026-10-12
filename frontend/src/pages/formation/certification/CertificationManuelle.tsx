@@ -112,7 +112,7 @@ export default function CertificationManuelle({ editing, onDone }: {
         </div>
         <div className="card-body">
           {!editing && (
-            <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:7, padding:'8px 12px', fontSize:12.5, color:'#1e40af', marginBottom:14 }}>
+            <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:7, padding:'8px 12px', fontSize:13.5, color:'#1e40af', marginBottom:14 }}>
               Le certificat est enregistré dans la liste avec une référence automatique, puis il doit être validé (paiement, ou gratuité avec motif) avant de pouvoir être imprimé.
             </div>
           )}

@@ -149,7 +149,7 @@ export default function SessionForm() {
                   </optgroup>
                 </select>
                 {selectedHoraire && (
-                  <div style={{ marginTop:6, padding:'6px 10px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:7, fontSize:12, color:'#1d4ed8', display:'flex', alignItems:'center', gap:6 }}>
+                  <div style={{ marginTop:6, padding:'6px 10px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:7, fontSize:13, color:'#1d4ed8', display:'flex', alignItems:'center', gap:6 }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     {selectedHoraire.horaire}
                   </div>
@@ -235,15 +235,15 @@ export default function SessionForm() {
                   <tr><td colSpan={10}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucune session trouvée'}</div></td></tr>
                 ) : table.data.map((s, idx) => (
                   <tr key={s.code_session}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
-                    <td style={{ fontWeight:500, fontSize:11 }}>{s.code_session}</td>
-                    <td style={{ fontSize:12 }}>{s.date_debut}</td>
-                    <td style={{ fontSize:12 }}>{s.date_fin}</td>
-                    <td style={{ fontSize:12 }}>{s.date_echeance}</td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{s.horaire_description}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                    <td style={{ fontWeight:500, fontSize:12 }}>{s.code_session}</td>
+                    <td style={{ fontSize:13 }}>{s.date_debut}</td>
+                    <td style={{ fontSize:13 }}>{s.date_fin}</td>
+                    <td style={{ fontSize:13 }}>{s.date_echeance}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{s.horaire_description}</td>
                     <td style={{ fontWeight:600, color:'#16a34a', whiteSpace:'nowrap' }}>{fmt(s.frais_formation)} Ar</td>
                     <td><span className="badge badge-info">{s.module_nom}</span></td>
-                    <td style={{ fontSize:12 }}>{s.lieu ? <span style={{ textTransform:'capitalize' }}>{s.lieu}</span> : <span style={{ color:'#cbd5e1' }}>—</span>}</td>
+                    <td style={{ fontSize:13 }}>{s.lieu ? <span style={{ textTransform:'capitalize' }}>{s.lieu}</span> : <span style={{ color:'#cbd5e1' }}>—</span>}</td>
                     <td><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(s)}><IcoEdit /></button>
                       {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(s.code_session)}><IcoTrash /></button>}

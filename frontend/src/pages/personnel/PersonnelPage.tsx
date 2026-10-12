@@ -23,7 +23,9 @@ export default function PersonnelPage() {
         <div className="top-bar">
           <span className="top-bar-title" style={{ display:'flex', alignItems:'center', gap:8 }}>Personnel</span>
         </div>
-        <div style={{ padding: '4px 24px 24px' }}>
+        {/* Même marge que les autres pages sans sous-onglets (Services,
+            Budgets, Module…) : 24px sous la barre de titre. */}
+        <div style={{ padding: 24 }}>
           {tab === 'personnel' ? <PersonnelTab /> : <FonctionTab />}
         </div>
       </div>

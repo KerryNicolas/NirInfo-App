@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import SentinelleSession from './components/SentinelleSession'
 import LoginPage          from './pages/LoginPage'
 import CreateUserPage     from './pages/CreateUserPage'
 // FIX : ForgotPasswordPage désactivée jusqu'à nouvel ordre (cohérent avec le
@@ -106,6 +107,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <SentinelleSession />
         <Toaster
           position="top-right"
           toastOptions={{

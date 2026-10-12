@@ -59,7 +59,7 @@ function DetailModal({ p, onClose }: { p: Personnel; onClose: () => void }) {
           <span style={{ fontWeight:700, fontSize:16 }}>Détail du personnel</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:13 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:14 }}>
           {rows.map(([label, val]) => (
             <div key={label} style={{ display:'contents' }}>
               <span style={{ color:'#64748b' }}>{label} :</span>
@@ -282,7 +282,7 @@ export default function PersonnelTab() {
                   <tr><td colSpan={8}><div className="empty-state">{personnelTable.search ? `Aucun résultat pour « ${personnelTable.search} »` : 'Aucun personnel enregistré'}</div></td></tr>
                 ) : personnelTable.data.map((p, i) => (
                   <tr key={p.matricule_pers} onClick={() => setViewingP(p)} style={{ cursor:'pointer' }}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(personnelTable.meta.current_page-1)*personnelTable.meta.per_page+i+1}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(personnelTable.meta.current_page-1)*personnelTable.meta.per_page+i+1}</td>
                     <td>
                       <div style={{ width:36, height:36, borderRadius:'50%', overflow:'hidden', background:'#f1f5f9', display:'flex', alignItems:'center', justifyContent:'center', position:'relative' }}>
                         {p.photo_pers
@@ -298,7 +298,7 @@ export default function PersonnelTab() {
                     <td><span className="badge badge-info">{p.matricule_pers}</span></td>
                     <td style={{ fontWeight:600 }}>{p.nom_pers} {p.prenom_pers}</td>
                     <td><span className="badge badge-success">{p.nom_fonction || '—'}</span></td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{p.tel_pers || '—'}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{p.tel_pers || '—'}</td>
                     <td style={{ fontWeight:600, color:'#16a34a' }}>{fmt(p.salaire_pers)} Ar</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => startEditPersonnel(p)}><IcoEdit /></button>

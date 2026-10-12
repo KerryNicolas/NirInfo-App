@@ -48,7 +48,7 @@ body {
   font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
   background: var(--bg-main);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -114,7 +114,7 @@ body {
   display: flex; align-items: center; gap: 10px;
   padding: 9px 16px;
   color: #94a3b8; text-decoration: none;
-  font-size: 13px; font-weight: 500;
+  font-size: 14px; font-weight: 500;
   width: 100%; border: none; background: none; cursor: pointer;
   transition: var(--transition);
   border-left: 3px solid transparent;
@@ -161,7 +161,7 @@ body {
 }
 
 .top-bar-title {
-  font-size: 15px; font-weight: 600; color: var(--text-primary);
+  font-size: 16px; font-weight: 600; color: var(--text-primary);
   letter-spacing: 0.01em;
 }
 
@@ -199,7 +199,7 @@ body {
   background: #fafbfc; flex-wrap: wrap; gap: 8px;
 }
 
-.card-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.card-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
 .card-body  { padding: 18px; }
 
 /* ════════════════════════════════════════
@@ -232,7 +232,7 @@ body {
 .tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 18px; flex-wrap: wrap; }
 
 .tab-btn {
-  padding: 9px 18px; font-size: 13px; font-weight: 500;
+  padding: 9px 18px; font-size: 14px; font-weight: 500;
   color: var(--text-secondary); background: none; border: none; cursor: pointer;
   border-bottom: 2px solid transparent; margin-bottom: -2px; transition: var(--transition);
   display: flex; align-items: center; gap: 6px;
@@ -246,13 +246,13 @@ body {
 .form-group { margin-bottom: 4px; }
 
 .form-label {
-  display: block; font-size: 12.5px; font-weight: 600;
+  display: block; font-size: 13.5px; font-weight: 600;
   color: var(--text-primary); margin-bottom: 5px; letter-spacing: 0.01em;
 }
 
 .form-control {
   width: 100%; padding: 8px 11px; border: 1px solid var(--border);
-  border-radius: var(--radius); font-size: 13px; color: var(--text-primary);
+  border-radius: var(--radius); font-size: 14px; color: var(--text-primary);
   background: white; transition: border-color 0.15s, box-shadow 0.15s; font-family: inherit;
 }
 .form-control:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(19,106,156,0.1); }
@@ -267,7 +267,7 @@ body {
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 7px 15px; border-radius: var(--radius);
-  font-size: 13px; font-weight: 500; border: none; cursor: pointer;
+  font-size: 14px; font-weight: 500; border: none; cursor: pointer;
   transition: var(--transition); text-decoration: none;
   white-space: nowrap; font-family: inherit;
 }
@@ -279,7 +279,7 @@ body {
 .btn-danger:hover   { background: #dc2626; }
 .btn-secondary { background: #f1f5f9; color: var(--text-primary); border: 1px solid var(--border); }
 .btn-secondary:hover { background: #e2e8f0; }
-.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-sm { padding: 4px 10px; font-size: 13px; }
 
 .btn-icon {
   padding: 6px; background: transparent; border: none; cursor: pointer;
@@ -307,13 +307,13 @@ table {
   width: 100%;
   min-width: max-content;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 thead th {
   background: #3d93c5; color: white;
   padding: 10px 14px; text-align: left;
-  font-weight: 600; font-size: 12px;
+  font-weight: 600; font-size: 13px;
   letter-spacing: 0.04em; text-transform: uppercase;
   white-space: nowrap;
 }
@@ -350,20 +350,20 @@ tbody td.td-wrap {
   width: 260px; transition: border-color 0.15s, box-shadow 0.15s;
 }
 .search-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(19,106,156,0.08); }
-.search-bar input { border: none; outline: none; font-size: 13px; color: var(--text-primary); width: 100%; background: transparent; font-family: inherit; }
+.search-bar input { border: none; outline: none; font-size: 14px; color: var(--text-primary); width: 100%; background: transparent; font-family: inherit; }
 .search-bar svg { color: var(--text-light); flex-shrink: 0; }
 
 /* ════════════════════════════════════════
    SECTION HEADER
 ════════════════════════════════════════ */
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.section-info .section-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-.section-info .section-count { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.section-info .section-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.section-info .section-count { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
 
 /* ════════════════════════════════════════
    BADGES
 ════════════════════════════════════════ */
-.badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
+.badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
 .badge-success { background: #dcfce7; color: #15803d; }
 .badge-warning { background: #fef3c7; color: #b45309; }
 .badge-danger  { background: #fee2e2; color: #b91c1c; }
@@ -404,7 +404,7 @@ tbody td.td-wrap {
   background: white;
   border-bottom: 1px solid #e2e8f0;
   padding: 0 28px;
-  height: 54px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -415,8 +415,8 @@ tbody td.td-wrap {
 }
 
 .dash-topbar-logo {
-  width: 70px;
-  height: 32px;
+  width: 112px;
+  height: 46px;
 }
 
 .dash-topbar-logo img {
@@ -432,7 +432,7 @@ tbody td.td-wrap {
 }
 
 .dash-topbar-greeting {
-  font-size: 13px;
+  font-size: 14px;
   color: #64748b;
 }
 
@@ -477,50 +477,51 @@ tbody td.td-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 54px);
+  min-height: calc(100vh - 64px);
   padding: 24px;
 }
 
 .dash-menu-card {
-  width: 300px;
+  width: 380px;
+  max-width: 100%;
   background: white;
   border-radius: 16px;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.10);
   overflow: hidden;
 }
 
 .dash-menu-header {
   background: #1e3a8a;
-  padding: 20px 18px 16px;
+  padding: 24px 20px 20px;
   text-align: center;
 }
 
 .dash-menu-header h2 {
   color: white;
-  font-size: 18px;
+  font-size: 21px;
   font-weight: 700;
   margin: 0;
 }
 
 .dash-menu-list {
-  padding: 15px 15px 15px;
+  padding: 20px 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .dash-menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 12px;
+  padding: 13px 18px;
   border-radius: 9px;
   margin-bottom: 4px;
   background: white;
   color: #374151;
   text-decoration: none;
-  font-size: 13.5px;
+  font-size: 15px;
   font-weight: 600;
   border: 1px solid #e2e8f0;
   transition: background 0.15s, border-color 0.15s;
@@ -541,11 +542,11 @@ tbody td.td-wrap {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 9px 14px;
+  padding: 12px 18px;
   border-radius: 9px;
   margin-bottom: 4px;
   color: #94a3b8;
-  font-size: 13.5px;
+  font-size: 15px;
   cursor: not-allowed;
   border: 1px solid #f1f5f9;
   background: #fafbfc;
@@ -569,7 +570,7 @@ tbody td.td-wrap {
 
 .dash-menu-footer {
   border-top: 1px solid #ffffff;
-  padding: 8px 10px;
+  padding: 10px 16px 14px;
   display: flex;
   justify-content: space-between;
   background: #ffffff;
@@ -579,13 +580,13 @@ tbody td.td-wrap {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: 13px;
   color: #374151;
   background: none;
   border: none;
   cursor: pointer;
   font-family: inherit;
-  padding: 5px 8px;
+  padding: 7px 10px;
   border-radius: 6px;
   transition: background 0.15s;
 }
@@ -602,8 +603,8 @@ tbody td.td-wrap {
   color: #dc2626;
   border: 1px solid #fecaca;
   border-radius: 7px;
-  padding: 5px 10px;
-  font-size: 12px;
+  padding: 7px 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
@@ -890,7 +891,7 @@ tbody td.td-wrap {
 .items-center    { align-items: center; }
 .justify-between { justify-content: space-between; }
 .font-semibold   { font-weight: 600; }
-.text-sm         { font-size: 12px; }
+.text-sm         { font-size: 13px; }
 .text-muted      { color: var(--text-secondary); }
 .w-full          { width: 100%; }
 

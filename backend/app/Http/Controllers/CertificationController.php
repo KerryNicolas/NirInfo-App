@@ -419,8 +419,14 @@ class CertificationController extends BaseApiController
         }
     }
 
+    // Total perçu sur une période : réservé aux administrateurs (admin et
+    // administrateur principal), comme l'onglet « Montant perçu » à l'écran.
     public function montant(Request $request)
     {
+        if (!$request->user()?->isAdmin()) {
+            return $this->err('Accès refusé.', 403);
+        }
+
         try {
             $query = DB::table('certificat')->whereNotNull('prix')->where('accept', 1);
             if ($request->filled('date_debut')) $query->whereDate('date', '>=', $request->date_debut);

@@ -123,7 +123,7 @@ function Fenetre({ titre, largeur = 420, onClose, children }: { titre: string; l
 }
 
 const Refus = ({ message }: { message: string | null }) => message
-  ? <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 7, padding: '8px 12px', fontSize: 13, marginBottom: 12 }}>{message}</div>
+  ? <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 7, padding: '8px 12px', fontSize: 14, marginBottom: 12 }}>{message}</div>
   : null
 
 interface Compte { id_compte: number; libelle: string }
@@ -156,7 +156,7 @@ function PayerFenetre({ libelle, montant, url, onClose, onFait }: { libelle: str
   return (
     <Fenetre titre="Payer la dépense" onClose={onClose}>
       <form onSubmit={payer}>
-        <div style={{ fontSize: 13, color: '#334155', marginBottom: 12 }}>
+        <div style={{ fontSize: 14, color: '#334155', marginBottom: 12 }}>
           « {libelle} » — <strong>{ar(montant)}</strong><br />
           Le compte choisi sera débité de ce montant.
         </div>
@@ -196,7 +196,7 @@ function MotifFenetre({ titre, explication, bouton, url, repli, onClose, onFait 
   return (
     <Fenetre titre={titre} onClose={onClose}>
       <form onSubmit={envoyer}>
-        <div style={{ fontSize: 13, color: '#334155', marginBottom: 12 }}>{explication}</div>
+        <div style={{ fontSize: 14, color: '#334155', marginBottom: 12 }}>{explication}</div>
         <Refus message={refus} />
         <div className="form-group">
           <label className="form-label" htmlFor="suivi-motif">Motif </label>
@@ -227,7 +227,7 @@ function HistoriqueFenetre({ libelle, url, onClose }: { libelle: string; url: st
 
   return (
     <Fenetre titre="Historique de la dépense" largeur={760} onClose={onClose}>
-      <div style={{ fontSize: 13, color: '#334155', marginBottom: 12 }}>« {libelle} »</div>
+      <div style={{ fontSize: 14, color: '#334155', marginBottom: 12 }}>« {libelle} »</div>
       <Refus message={refus} />
       {lignes === null ? <div className="loading-center"><div className="spinner" /> Chargement…</div> : (
         <div className="table-wrapper">
@@ -238,13 +238,13 @@ function HistoriqueFenetre({ libelle, url, onClose }: { libelle: string; url: st
                 ? <tr><td colSpan={7}><div className="empty-state">{refus ? '—' : 'Aucun historique : cette dépense est antérieure au suivi.'}</div></td></tr>
                 : lignes.map(e => (
                   <tr key={e.id}>
-                    <td style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>{dateHeure(e.created_at)}</td>
+                    <td style={{ fontSize: 13, color: '#64748b', whiteSpace: 'nowrap' }}>{dateHeure(e.created_at)}</td>
                     <td style={{ fontWeight: 600 }}>{ACTIONS[e.action] ?? e.action}</td>
-                    <td style={{ fontSize: 12 }}>{e.statut_avant ? `${libelleStatut(e.statut_avant)} → ` : ''}{libelleStatut(e.statut_apres)}</td>
+                    <td style={{ fontSize: 13 }}>{e.statut_avant ? `${libelleStatut(e.statut_avant)} → ` : ''}{libelleStatut(e.statut_apres)}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{e.montant !== null && e.montant !== undefined ? ar(e.montant) : '—'}</td>
-                    <td style={{ fontSize: 12 }}>{e.compte || '—'}</td>
-                    <td style={{ fontSize: 12 }}>{e.motif || '—'}</td>
-                    <td style={{ fontSize: 12 }}>{e.utilisateur || '—'}</td>
+                    <td style={{ fontSize: 13 }}>{e.compte || '—'}</td>
+                    <td style={{ fontSize: 13 }}>{e.motif || '—'}</td>
+                    <td style={{ fontSize: 13 }}>{e.utilisateur || '—'}</td>
                   </tr>
                 ))}
             </tbody>
@@ -259,7 +259,7 @@ function HistoriqueFenetre({ libelle, url, onClose }: { libelle: string; url: st
 
 const bouton = (couleur: string, fond: string, bord: string): React.CSSProperties => ({
   background: fond, color: couleur, border: `1px solid ${bord}`, borderRadius: 6, padding: '4px 8px',
-  fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+  fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
 })
 
 interface ActionsProps {
@@ -340,7 +340,7 @@ export function ActionsSuivi({ type, id, libelle, montant, depense, onFait }: Ac
 export function AvisModificationValidee({ depense }: { depense: SuiviChamps | null }) {
   if (!depense || depense.statut !== 'validee') return null
   return (
-    <div data-avis-validee style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '8px 12px', fontSize: 13, color: '#92400e', marginBottom: 14 }}>
+    <div data-avis-validee style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '8px 12px', fontSize: 14, color: '#92400e', marginBottom: 14 }}>
       Cette dépense est validée. Si son montant change, elle repassera à « enregistrée » et devra être validée à nouveau.
     </div>
   )

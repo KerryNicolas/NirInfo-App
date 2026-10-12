@@ -11,7 +11,7 @@ class AdminOnlyDelete
 {
     public function handle(Request $request, Closure $next)
     {
-        if ($request->isMethod('DELETE') && $request->user()?->roleRelation?->slug !== 'admin') {
+        if ($request->isMethod('DELETE') && !$request->user()?->isAdmin()) {
             return response()->json(['message' => 'Accès refusé.'], 403);
         }
 

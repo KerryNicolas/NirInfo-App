@@ -36,7 +36,7 @@ function DetailModal({ p, onClose }: { p: Prestation; onClose: () => void }) {
           <span style={{ fontWeight:700, fontSize:16 }}>Détail de la prestation</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:13 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:14 }}>
           {rows.map(([label, val]) => (
             <div key={label} style={{ display:'contents' }}>
               <span style={{ color:'#64748b' }}>{label} :</span>
@@ -216,13 +216,13 @@ export default function PrestationTab() {
                   <tr><td colSpan={8}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucune prestation'}</div></td></tr>
                 ) : table.data.map((p, idx) => (
                   <tr key={p.id_prestation} onClick={() => setViewing(p)} style={{ cursor:'pointer' }}>
-                    <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                    <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
                     <td style={{ fontWeight:600 }}>{p.client_name}</td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{p.service_name}</td>
-                    <td style={{ fontSize:12 }}>{p.benefit_date}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{p.service_name}</td>
+                    <td style={{ fontSize:13 }}>{p.benefit_date}</td>
                     <td>{fmt(p.benefit_costs)} Ar</td>
                     <td style={{ fontWeight:600, color:'#16a34a' }}>{fmt(p.payroll_amount)} Ar</td>
-                    <td style={{ fontSize:12, color:'#64748b' }}>{p.account_number}</td>
+                    <td style={{ fontSize:13, color:'#64748b' }}>{p.account_number}</td>
                     <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       {/* FIX : bouton Modifier ajouté — manquait totalement */}
                       <button className="btn-icon edit" onClick={() => handleEdit(p)}><IcoEdit /></button>

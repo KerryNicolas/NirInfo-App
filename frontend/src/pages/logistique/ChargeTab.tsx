@@ -1,3 +1,4 @@
+import { useAuth } from '../../contexts/AuthContext'
 import { useEffect, useRef, useState } from 'react'
 import api from '../../api/axios'
 import toast from 'react-hot-toast'
@@ -30,6 +31,7 @@ const IcoImage = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="non
 const emptyForm = { designation: '', montant: '', mois: String(new Date().getMonth() + 1), annee: String(new Date().getFullYear()), date: '', photo_charge: '' }
 
 export default function ChargeTab() {
+  const { isAdmin } = useAuth()
   const [charges, setCharges]   = useState<Charge[]>([])
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
@@ -215,7 +217,7 @@ export default function ChargeTab() {
                     <td>
                       <div style={{ display:'flex', gap:5 }}>
                         <button onClick={() => handleEdit(c)} style={{ display:'flex', alignItems:'center', gap:4, background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe', borderRadius:6, padding:'5px 9px', fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoEdit /> Modifier</button>
-                        <button onClick={() => handleDelete(c.id_charge)} style={{ display:'flex', alignItems:'center', gap:4, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca', borderRadius:6, padding:'5px 9px', fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoTrash /> Suppr.</button>
+                        {isAdmin() && <button onClick={() => handleDelete(c.id_charge)} style={{ display:'flex', alignItems:'center', gap:4, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca', borderRadius:6, padding:'5px 9px', fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoTrash /> Suppr.</button>}
                       </div>
                     </td>
                   </tr>

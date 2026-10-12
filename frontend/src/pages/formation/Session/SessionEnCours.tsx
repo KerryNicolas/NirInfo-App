@@ -100,16 +100,16 @@ export default function SessionEnCours() {
                 <tr><td colSpan={10}><div className="empty-state">Aucune session en cours</div></td></tr>
               ) : table.data.map((s, idx) => (
                 <tr key={s.code_session}>
-                  <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
-                  <td style={{ fontWeight:500, fontSize:12 }}>{s.code_session}</td>
-                  <td style={{ fontSize:12 }}>{s.date_debut}</td>
-                  <td style={{ fontSize:12 }}>{s.date_fin}</td>
-                  <td style={{ fontSize:12 }}>{s.date_echeance}</td>
-                  <td style={{ fontSize:12, color:'#64748b' }}>{s.horaire_description}</td>
+                  <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
+                  <td style={{ fontWeight:500, fontSize:13 }}>{s.code_session}</td>
+                  <td style={{ fontSize:13 }}>{s.date_debut}</td>
+                  <td style={{ fontSize:13 }}>{s.date_fin}</td>
+                  <td style={{ fontSize:13 }}>{s.date_echeance}</td>
+                  <td style={{ fontSize:13, color:'#64748b' }}>{s.horaire_description}</td>
                   <td style={{ fontWeight:600, color:'#16a34a', whiteSpace:'nowrap' }}>{fmt(s.frais_formation)} Ar</td>
                   <td><span className="badge badge-info">{s.module_nom}</span></td>
                   <td className="text-center"><span className="badge badge-success">{s.nb_inscrits}</span></td>
-                  <td style={{ fontSize:11, color:'#64748b' }}>{s.formateur_nom}</td>
+                  <td style={{ fontSize:12, color:'#64748b' }}>{s.formateur_nom}</td>
                 </tr>
               ))}
             </tbody>

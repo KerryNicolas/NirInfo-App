@@ -34,7 +34,7 @@ function DetailModal({ r, onClose }: { r: Echeance; onClose: () => void }) {
           <span style={{ fontWeight:700, fontSize:16 }}>Détail de l'échéance</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:13 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:14 }}>
           {rows.map(([label, val]) => (
             <div key={label} style={{ display:'contents' }}>
               <span style={{ color:'#64748b' }}>{label} :</span>
@@ -126,7 +126,7 @@ export default function EcheancePage() {
             <div style={{ background:'white', borderRadius:12, padding:'16px 24px', marginBottom:20, border:'1px solid #e2e8f0', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', display:'flex', alignItems:'center', gap:16 }}>
               <div style={{ width:44, height:44, borderRadius:11, background:'#fef3c7', color:'#b45309', display:'flex', alignItems:'center', justifyContent:'center' }}><IcoDollar /></div>
               <div>
-                <p style={{ fontSize:12, color:'#64748b', marginBottom:2 }}>Montant total à percevoir (toute la sélection)</p>
+                <p style={{ fontSize:13, color:'#64748b', marginBottom:2 }}>Montant total à percevoir (toute la sélection)</p>
                 <p style={{ fontSize:24, fontWeight:800, color:'#b45309' }}>{fmt(totalAPercevoir)} Ar</p>
               </div>
               <div style={{ marginLeft:'auto' }}>
@@ -166,12 +166,12 @@ export default function EcheancePage() {
                       </td></tr>
                     ) : table.data.map((r, i) => (
                       <tr key={r.id_paiement} onClick={() => setViewing(r)} style={{ cursor:'pointer' }}>
-                        <td style={{ color:'#94a3b8', fontSize:12 }}>{(table.meta.current_page-1)*table.meta.per_page+i+1}</td>
-                        <td style={{ fontSize:12 }}>{r.date_echeance}</td>
+                        <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+i+1}</td>
+                        <td style={{ fontSize:13 }}>{r.date_echeance}</td>
                         <td><span className="badge badge-info">{r.matricule}</span></td>
                         <td style={{ fontWeight:600 }}>{r.nom}</td>
                         <td>{r.prenom}</td>
-                        <td style={{ fontSize:12, color:'#64748b' }}>{r.code_session}</td>
+                        <td style={{ fontSize:13, color:'#64748b' }}>{r.code_session}</td>
                         <td style={{ fontWeight:600, color:'#16a34a' }}>{fmt(r.montant_paye)} Ar</td>
                         <td>
                           <span className={`badge ${Number(r.reste)===0?'badge-success':'badge-danger'}`}>{fmt(r.reste)} Ar</span>

@@ -13,6 +13,9 @@ class RolePermissionSeeder extends Seeder
         // Rôles
         $admin = Role::firstOrCreate(['slug' => 'admin'], ['name' => 'Administrateur']);
         $user  = Role::firstOrCreate(['slug' => 'user'],  ['name' => 'Utilisateur simple']);
+        // Administrateur principal — même libellé que la migration
+        // 2026_10_13_000001_add_super_admin_and_modules_permission.
+        $superAdmin = Role::firstOrCreate(['slug' => 'super-admin'], ['name' => 'Administrateur principal']);
 
         $permissions = [
             'formations.access'          => 'Accès module Formations',
@@ -30,16 +33,24 @@ class RolePermissionSeeder extends Seeder
             // 2026_10_12_000001_add_depenses_permissions (admin uniquement).
             'depenses.valider'           => 'Valider une dépense (achat ou charge)',
             'depenses.payer'             => 'Payer une dépense ou annuler son paiement',
+            // Administrateur principal uniquement — jamais le rôle admin.
+            'modules.manage'             => 'Créer, modifier et supprimer les modules de formation',
         ];
 
         foreach ($permissions as $slug => $name) {
             Permission::firstOrCreate(['slug' => $slug], ['name' => $name]);
         }
 
-        // Admin = toutes les permissions. syncWithoutDetaching : le seeder
+        // Admin = toutes les permissions SAUF modules.manage (réservée à
+        // l'administrateur principal). syncWithoutDetaching : le seeder
         // AJOUTE ce qui manque et ne retire jamais une permission accordée
         // par ailleurs (sync() les aurait retirées).
-        $admin->permissions()->syncWithoutDetaching(Permission::pluck('id'));
+        $admin->permissions()->syncWithoutDetaching(
+            Permission::where('slug', '!=', 'modules.manage')->pluck('id')
+        );
+
+        // Administrateur principal = toutes les permissions.
+        $superAdmin->permissions()->syncWithoutDetaching(Permission::pluck('id'));
 
         // User simple = Formations, Logistique, Personnel
         $userPerms = Permission::whereIn('slug', [

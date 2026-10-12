@@ -12,7 +12,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -183,7 +185,7 @@ class AuthController extends Controller
      ══════════════════════════════════════ */
     public function createUser(Request $request)
     {
-        if ($request->user()->roleRelation?->slug !== 'admin') {
+        if (!$request->user()->isAdmin()) {
             return response()->json([
                 'message' => "Seul un administrateur peut créer un compte.",
             ], 403);
@@ -193,7 +195,12 @@ class AuthController extends Controller
             'nom'      => 'required|string|max:255',
             'prenom'   => 'required|string|max:255',
             'email'    => 'required|string|email|max:255|unique:users',
-            'role_id'  => 'required|integer|exists:roles,id',
+            // Le rôle d'administrateur principal ne s'attribue jamais ici, quel
+            // que soit le compte qui fait la demande : il est traité comme un
+            // rôle inexistant.
+            'role_id'  => ['required', 'integer', Rule::exists('roles', 'id')->where(
+                fn ($q) => $q->where('slug', '!=', User::ROLE_SUPER_ADMIN)
+            )],
         ], [
             'nom.required'     => 'Le nom est obligatoire.',
             'prenom.required'  => 'Le prénom est obligatoire.',
@@ -506,6 +513,55 @@ class AuthController extends Controller
      | HELPER
      ══════════════════════════════════════ */
 
+    /* ══════════════════════════════════════
+     | PHOTO DE PROFIL — toujours celle du compte connecté : l'adresse ne
+     | porte aucun identifiant, personne ne peut donc toucher à la photo d'un
+     | autre. Fichiers sur le disque « public », dossier utilisateurs/.
+     ══════════════════════════════════════ */
+    public function uploadPhoto(Request $request)
+    {
+        // "image" seul accepterait aussi le SVG (qui peut contenir du script) :
+        // on s'en tient à trois formats matriciels.
+        $request->validate([
+            'photo' => 'required|file|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ], [
+            'photo.required' => 'Choisissez une photo.',
+            'photo.image'    => 'Le fichier doit être une image.',
+            'photo.mimes'    => 'Formats acceptés : JPG, PNG ou WEBP.',
+            'photo.max'      => 'La photo ne doit pas dépasser 2 Mo.',
+        ]);
+
+        $user   = $request->user();
+        $ancien = $user->photo;
+
+        $user->forceFill(['photo' => $request->file('photo')->store('utilisateurs', 'public')])->save();
+
+        if ($ancien) {
+            Storage::disk('public')->delete($ancien);
+        }
+
+        return response()->json([
+            'user'    => $this->formatUser($user->fresh()->load('roleRelation.permissions')),
+            'message' => 'Photo de profil mise à jour.',
+        ]);
+    }
+
+    public function removePhoto(Request $request)
+    {
+        $user   = $request->user();
+        $ancien = $user->photo;
+
+        if ($ancien) {
+            $user->forceFill(['photo' => null])->save();
+            Storage::disk('public')->delete($ancien);
+        }
+
+        return response()->json([
+            'user'    => $this->formatUser($user->fresh()->load('roleRelation.permissions')),
+            'message' => 'Photo de profil retirée.',
+        ]);
+    }
+
     /**
      * Clé du compteur d'échecs de connexion : email (en minuscules) + IP.
      * Email + IP plutôt qu'email seul : sinon n'importe qui pourrait bloquer
@@ -522,7 +578,12 @@ class AuthController extends Controller
         unset($data['role_relation']);
 
         $data['role_slug']   = $user->roleRelation?->slug;
-        $data['permissions'] = $user->roleRelation?->permissions->pluck('slug') ?? [];
+        // Adresse complète de la photo de profil (null = afficher les initiales).
+        $data['photo_url']   = $user->photo ? url('storage/' . $user->photo) : null;
+        // Administrateur principal : toutes les permissions (cf. User::hasPermission).
+        $data['permissions'] = $user->isSuperAdmin()
+            ? DB::table('permissions')->pluck('slug')
+            : ($user->roleRelation?->permissions->pluck('slug') ?? []);
 
         return $data;
     }

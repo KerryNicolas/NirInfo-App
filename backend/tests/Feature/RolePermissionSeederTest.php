@@ -62,6 +62,21 @@ class RolePermissionSeederTest extends TestCase
         $this->assertCount(0, $doublons, 'Aucune permission ne doit être attribuée deux fois au même rôle.');
     }
 
+    public function test_modules_manage_est_reservee_a_l_administrateur_principal(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $this->seed(RolePermissionSeeder::class);
+
+        $roles = Role::whereHas('permissions', fn ($q) => $q->where('slug', 'modules.manage'))->pluck('slug')->all();
+        $this->assertSame(['super-admin'], $roles);
+
+        // L'administrateur principal a toutes les permissions, sans exception.
+        $this->assertSame(
+            Permission::count(),
+            Role::where('slug', 'super-admin')->firstOrFail()->permissions()->count()
+        );
+    }
+
     public function test_deux_executions_donnent_le_meme_resultat(): void
     {
         $this->seed(RolePermissionSeeder::class);

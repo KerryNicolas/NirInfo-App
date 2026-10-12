@@ -68,9 +68,9 @@ export default function DataTable<T extends Record<string, unknown>>({
       <div className="card-header" style={{ flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {title && <span className="card-title">{title}</span>}
-          {subtitle && <span style={{ fontSize: 12, color: '#64748b' }}>{subtitle}</span>}
+          {subtitle && <span style={{ fontSize: 13, color: '#64748b' }}>{subtitle}</span>}
           {!title && !subtitle && (
-            <span style={{ fontSize: 12, color: '#64748b' }}>
+            <span style={{ fontSize: 13, color: '#64748b' }}>
               {meta.total} résultat{meta.total > 1 ? 's' : ''}
             </span>
           )}
@@ -112,18 +112,18 @@ export default function DataTable<T extends Record<string, unknown>>({
             <div className="spinner" /> Chargement…
           </div>
         ) : error ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#ef4444', fontSize: 13 }}>
+          <div style={{ padding: 40, textAlign: 'center', color: '#ef4444', fontSize: 14 }}>
             {error} —{' '}
             <button onClick={reload}
-              style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontSize: 13 }}>
+              style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontSize: 14 }}>
               Réessayer
             </button>
           </div>
         ) : (
-          <table style={{ width: '100%', minWidth: 'max-content', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', minWidth: 'max-content', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr>
-                <th style={{ background: '#1e3a8a', color: 'white', padding: cellPad, textAlign: 'left', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap', borderRadius: '8px 0 0 0' }}>
+                <th style={{ background: '#1e3a8a', color: 'white', padding: cellPad, textAlign: 'left', fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap', borderRadius: '8px 0 0 0' }}>
                   #
                 </th>
                 {columns.map((col, ci) => (
@@ -133,7 +133,7 @@ export default function DataTable<T extends Record<string, unknown>>({
                     style={{
                       background: '#1e3a8a', color: 'white',
                       padding: cellPad, textAlign: col.align ?? 'left',
-                      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                      fontSize: 12, fontWeight: 700, letterSpacing: '0.06em',
                       textTransform: 'uppercase', whiteSpace: 'nowrap',
                       width: col.width,
                       cursor: col.sortable ? 'pointer' : 'default',
@@ -150,7 +150,7 @@ export default function DataTable<T extends Record<string, unknown>>({
                   </th>
                 ))}
                 {actions && (
-                  <th style={{ background: '#1e3a8a', color: 'white', padding: cellPad, textAlign: 'center', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', borderRadius: '0 8px 0 0', whiteSpace: 'nowrap' }}>
+                  <th style={{ background: '#1e3a8a', color: 'white', padding: cellPad, textAlign: 'center', fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', borderRadius: '0 8px 0 0', whiteSpace: 'nowrap' }}>
                     Action
                   </th>
                 )}
@@ -172,7 +172,7 @@ export default function DataTable<T extends Record<string, unknown>>({
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
                   {/* Numéro de ligne absolu (pas relatif à la page) */}
-                  <td style={{ padding: cellPad, color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: cellPad, color: '#94a3b8', fontSize: 13, whiteSpace: 'nowrap' }}>
                     {(meta.current_page - 1) * meta.per_page + idx + 1}
                   </td>
                   {columns.map(col => (

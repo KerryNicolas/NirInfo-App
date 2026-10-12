@@ -56,7 +56,7 @@ export default function ConfirmDialog({
           <IcoAlert />
         </div>
         <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>{title}</div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 22, lineHeight: 1.5 }}>{message}</div>
+        <div style={{ fontSize: 14, color: '#64748b', marginBottom: 22, lineHeight: 1.5 }}>{message}</div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button
             onClick={onCancel}
@@ -69,7 +69,7 @@ export default function ConfirmDialog({
             onClick={onConfirm}
             style={{
               flex: 1, background: danger ? '#dc2626' : 'var(--accent)', color: 'white', border: 'none',
-              borderRadius: 8, padding: '9px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+              borderRadius: 8, padding: '9px 0', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
             {confirmLabel}

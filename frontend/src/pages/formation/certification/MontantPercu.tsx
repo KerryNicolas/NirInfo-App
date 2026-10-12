@@ -43,12 +43,12 @@ export default function MontantPercu() {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
             <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:12, padding:24, textAlign:'center' }}>
               <div style={{ width:48, height:48, borderRadius:'50%', background:'#dcfce7', color:'#16a34a', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 12px' }}><IcoAward /></div>
-              <p style={{ fontSize:12, color:'#64748b', marginBottom:6 }}>Certificats délivrés</p>
+              <p style={{ fontSize:13, color:'#64748b', marginBottom:6 }}>Certificats délivrés</p>
               <p style={{ fontSize:40, fontWeight:800, color:'#16a34a', lineHeight:1 }}>{data.nb}</p>
             </div>
             <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:12, padding:24, textAlign:'center' }}>
               <div style={{ width:48, height:48, borderRadius:'50%', background:'#dbeafe', color:'#2563eb', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 12px' }}><IcoMoney /></div>
-              <p style={{ fontSize:12, color:'#64748b', marginBottom:6 }}>Montant total perçu</p>
+              <p style={{ fontSize:13, color:'#64748b', marginBottom:6 }}>Montant total perçu</p>
               <p style={{ fontSize:32, fontWeight:800, color:'#2563eb', lineHeight:1 }}>{fmtMontant(data.montant)} Ar</p>
             </div>
           </div>
