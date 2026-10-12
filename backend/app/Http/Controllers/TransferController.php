@@ -90,6 +90,18 @@ class TransferController extends BaseApiController
             'starting_account'    => 'required|integer|exists:compte,id_compte|different:destination_account',
             'destination_account' => 'required|integer|exists:compte,id_compte',
             'amount'              => 'required|numeric|min:1',
+        ], [
+            // Messages français : les règles ne changent pas, seul le texte des refus (422) est traduit.
+            'starting_account.required'    => 'Choisissez le compte de départ.',
+            'starting_account.integer'     => "Le compte de départ n'existe pas.",
+            'starting_account.exists'      => "Le compte de départ n'existe pas.",
+            'starting_account.different'   => 'Le compte de départ et le compte de destination doivent être différents.',
+            'destination_account.required' => 'Choisissez le compte de destination.',
+            'destination_account.integer'  => "Le compte de destination n'existe pas.",
+            'destination_account.exists'   => "Le compte de destination n'existe pas.",
+            'amount.required'              => 'Le montant est obligatoire.',
+            'amount.numeric'               => 'Le montant doit être un nombre.',
+            'amount.min'                   => 'Le montant doit être supérieur à 0.',
         ]);
     }
 

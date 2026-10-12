@@ -64,6 +64,7 @@ const menuItemsBySection: Record<Props['section'], MenuItem[]> = {
     { label: 'Compte',    to: '/budgets/comptes',    icon: <SvgFacture /> },
     { label: 'Gestion',   to: '/budgets/gerer',      icon: <IcoBudget /> },
     { label: 'Virement',  to: '/budgets/transferts', icon: <SvgSession /> },
+    { label: 'Trésorerie', to: '/budgets/tresorerie', icon: <SvgEtat /> },
     { label: 'Menu Principal',    to: '/dashboard',          icon: <SvgRetour /> },
   ],
   // FIX : Logistique n'a qu'une seule route — Achat/Charge sont des onglets

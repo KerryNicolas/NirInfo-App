@@ -7,6 +7,7 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import { useAuth } from '../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoSave, IcoTrash, IcoSearch, IcoX } from '../../components/icons'
 import { formatMontantInput, parseMontantInput } from '../../utils/validators'
+import { messageErreur } from '../../utils/apiError'
 
 interface Transfer {
   id_transfer: number; starting_account: number; destination_account: number; amount: number
@@ -68,14 +69,14 @@ export default function TransferTab() {
       }
       resetForm()
       table.reload()
-    } catch (err: any) { toast.error(err.response?.data?.message || "Erreur lors du virement") }
+    } catch (err) { toast.error(messageErreur(err, "Erreur lors du virement")) }
     finally { setSaving(false) }
   }
 
   const handleDelete = async () => {
     if (!confirmDeleteId) return
     try { await api.delete(`/transferts/${confirmDeleteId}`); toast.success('Virement supprimé'); table.reload() }
-    catch { toast.error('Erreur lors de la suppression') }
+    catch (err) { toast.error(messageErreur(err, 'Erreur lors de la suppression')) }
     finally { setConfirmDeleteId(null) }
   }
 

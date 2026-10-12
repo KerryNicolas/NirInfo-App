@@ -8,15 +8,33 @@ import Sidebar from '../../components/Sidebar'
 import { useAuth } from '../../contexts/AuthContext'
 import { IcoCart, IcoCharge, IcoEdit, IcoPlus, IcoSave, IcoTrash, IcoX, IcoExport } from '../../components/icons'
 import { formatMontantInput, parseMontantInput } from '../../utils/validators'
+import { messageErreur } from '../../utils/apiError'
+import { ActionsSuivi, AvisModificationValidee, StatutBadge, lignesDetail, modifiable, supprimable, useSuiviActif, type SuiviChamps } from './suivi/SuiviDepenses'
 
 type Tab    = 'achat' | 'charge'
-interface Achat  { id_achat: number; nom_materiel: string; prix_unitaire: number; quantite: number; montant: number; date_achat: string; editeur?: string }
-interface Charge { id_charge: number; designation: string; montant: number; mois: number; annee: number; date: string; editeur?: string }
+interface Achat  extends SuiviChamps { id_achat: number; nom_materiel: string; prix_unitaire: number; quantite: number; montant: number; date_achat: string; editeur?: string }
+interface Charge extends SuiviChamps { id_charge: number; designation: string; montant: number; mois: number; annee: number; date: string; editeur?: string }
 
 const MOIS  = ['','Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
 const TODAY = new Date().toISOString().split('T')[0]
 const YEAR  = new Date().getFullYear()
 const fmt   = (n: number | string) => new Intl.NumberFormat('fr-MG').format(Number(n))
+
+// FIX : l'API renvoie les montants des achats et des charges avec deux
+// décimales ("1800.00"). formatMontantInput() ne garde que les chiffres : il
+// lisait donc "180000", et enregistrer une modification sans retaper le prix
+// multipliait le montant par 100. On convertit d'abord la valeur reçue en
+// nombre entier d'ariary (le champ ne saisit que des entiers), puis on la
+// formate pour l'affichage. Une valeur vide ou illisible donne un champ vide.
+// HYPOTHÈSE : les montants des achats et des charges sont des ENTIERS en
+// ariary — c'est le cas de toutes les lignes existantes. Un montant qui
+// aurait de vraies décimales (1800.50) serait arrondi à l'ariary (1801) à
+// l'ouverture de la modification, puis enregistré arrondi.
+const montantPourChamp = (v: number | string | null | undefined): string => {
+  if (v === null || v === undefined || String(v).trim() === '') return ''
+  const n = Number(v)
+  return Number.isFinite(n) ? formatMontantInput(String(Math.round(n))) : ''
+}
 
 // FIX : navItems ne sert plus qu'à la barre d'onglets pilule en haut du
 // contenu (achat/charge) — la navigation du sidebar à gauche est désormais
@@ -55,6 +73,10 @@ function DetailModal({ title, rows, onClose }: { title: string; rows: [string, s
 
 export default function LogistiquePage() {
   const { isAdmin } = useAuth()
+  // Suivi des dépenses : faux tant que le serveur ne l'a pas confirmé. Tout ce
+  // qui en dépend ci-dessous est précédé de « suiviActif && » : suivi
+  // désactivé, cet écran reste exactement celui d'avant.
+  const suiviActif = useSuiviActif()
   const [tab, setTab] = useState<Tab>('achat')
 
   const achatTable  = useTable<Achat>('/achats',  { perPage: 15 })
@@ -123,13 +145,13 @@ export default function LogistiquePage() {
       else       { await api.post('/achats', payloadA);                  toast.success('Achat enregistré') }
       setFormA({ nom_materiel:'', prix_unitaire:'', quantite:'1', date_achat: TODAY }); setEditA(null)
       achatTable.reload()
-    } catch { toast.error('Erreur enregistrement') }
+    } catch (err) { toast.error(messageErreur(err, 'Erreur enregistrement')) }
     finally { setLoadA(false) }
   }
 
   const editAchat = (a: Achat) => {
     setEditA(a)
-    setFormA({ nom_materiel: a.nom_materiel, prix_unitaire: formatMontantInput(String(a.prix_unitaire)), quantite: String(a.quantite), date_achat: String(a.date_achat).slice(0,10) })
+    setFormA({ nom_materiel: a.nom_materiel, prix_unitaire: montantPourChamp(a.prix_unitaire), quantite: String(a.quantite), date_achat: String(a.date_achat).slice(0,10) })
     window.scrollTo({ top:0, behavior:'smooth' })
   }
 
@@ -145,13 +167,13 @@ export default function LogistiquePage() {
       else       { await api.post('/charges', payloadC);                   toast.success('Charge enregistrée') }
       setFormC({ designation:'', montant:'', mois: String(new Date().getMonth()+1), annee: String(YEAR), date: TODAY }); setEditC(null)
       chargeTable.reload()
-    } catch { toast.error('Erreur enregistrement') }
+    } catch (err) { toast.error(messageErreur(err, 'Erreur enregistrement')) }
     finally { setLoadC(false) }
   }
 
   const editCharge = (c: Charge) => {
     setEditC(c)
-    setFormC({ designation: c.designation, montant: formatMontantInput(String(c.montant)), mois: String(c.mois), annee: String(c.annee), date: String(c.date).slice(0,10) })
+    setFormC({ designation: c.designation, montant: montantPourChamp(c.montant), mois: String(c.mois), annee: String(c.annee), date: String(c.date).slice(0,10) })
     window.scrollTo({ top:0, behavior:'smooth' })
   }
 
@@ -172,8 +194,8 @@ export default function LogistiquePage() {
       } else {
         await api.delete(`/charges/${id}`); toast.success('Charge supprimée'); chargeTable.reload()
       }
-    } catch {
-      toast.error('Erreur lors de la suppression')
+    } catch (err) {
+      toast.error(messageErreur(err, 'Erreur lors de la suppression'))
     } finally {
       setConfirmDelete(null)
     }
@@ -263,7 +285,7 @@ export default function LogistiquePage() {
                       Montant : {fmt(montantCalc)} Ar
                     </div>
                   )}
-                  <button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:6 }} disabled={loadA}>
+                  {suiviActif && <AvisModificationValidee depense={editA} />}<button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:6 }} disabled={loadA}>
                     {loadA ? <><span className="spinner" style={{ width:14, height:14, borderWidth:2 }} /> Enregistrement…</> : editA ? <><IcoSave /> Mettre à jour</> : <><IcoPlus /> Enregistrer</>}
                   </button>
                 </form>
@@ -316,10 +338,10 @@ export default function LogistiquePage() {
               <div className="table-wrapper">
                 {achatTable.loading ? <div className="loading-center"><div className="spinner"/></div> : (
                   <table>
-                    <thead><tr><th>#</th><th>Matériel</th><th>Prix unit.</th><th>Qté</th><th>Montant</th><th>Date</th><th>Action</th></tr></thead>
+                    <thead><tr><th>#</th><th>Matériel</th><th>Prix unit.</th><th>Qté</th><th>Montant</th><th>Date</th>{suiviActif && <th>Statut</th>}<th>Action</th></tr></thead>
                     <tbody>
                       {achatTable.data.length === 0
-                        ? <tr><td colSpan={7} style={{ textAlign:'center', padding:40, color:'#94a3b8', fontSize:13 }}>Aucun achat</td></tr>
+                        ? <tr><td colSpan={suiviActif ? 8 : 7} style={{ textAlign:'center', padding:40, color:'#94a3b8', fontSize:13 }}>Aucun achat</td></tr>
                         : achatTable.data.map((a, i) => (
                           <tr key={a.id_achat} onClick={() => setViewingAchat(a)} style={{ cursor:'pointer' }}>
                             <td style={{ color:'#94a3b8', fontSize:12 }}>{(achatTable.meta.current_page-1)*achatTable.meta.per_page+i+1}</td>
@@ -327,10 +349,10 @@ export default function LogistiquePage() {
                             <td style={{ color:'#64748b' }}>{fmt(a.prix_unitaire)} Ar</td>
                             <td><span className="badge badge-info">{a.quantite}</span></td>
                             <td style={{ fontWeight:700, color:'var(--accent)' }}>{fmt(a.montant)} Ar</td>
-                            <td style={{ fontSize:12, color:'#64748b' }}>{String(a.date_achat).slice(0,10)}</td>
+                            <td style={{ fontSize:12, color:'#64748b' }}>{String(a.date_achat).slice(0,10)}</td>{suiviActif && <td><StatutBadge depense={a} /></td>}
                             <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
-                              <button className="btn-icon edit" onClick={() => editAchat(a)}><IcoEdit /></button>
-                              {isAdmin() && <button className="btn-icon delete" onClick={() => askDeleteAchat(a)}><IcoTrash /></button>}
+                              {(!suiviActif || modifiable(a)) && <button className="btn-icon edit" onClick={() => editAchat(a)}><IcoEdit /></button>}
+                              {isAdmin() && (!suiviActif || supprimable(a)) && <button className="btn-icon delete" onClick={() => askDeleteAchat(a)}><IcoTrash /></button>}{suiviActif && <ActionsSuivi type="achat" id={a.id_achat} libelle={a.nom_materiel} montant={a.montant} depense={a} onFait={achatTable.reload} />}
                             </div></td>
                           </tr>
                         ))
@@ -382,7 +404,7 @@ export default function LogistiquePage() {
                       <input className="form-control" type="date" value={formC.date} onChange={e => setFormC({...formC, date:e.target.value})} required />
                     </div>
                   </div>
-                  <button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:6 }} disabled={loadC}>
+                  {suiviActif && <AvisModificationValidee depense={editC} />}<button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:6 }} disabled={loadC}>
                     {loadC ? <><span className="spinner" style={{ width:14, height:14, borderWidth:2 }} /> Enregistrement…</> : editC ? <><IcoSave /> Mettre à jour</> : <><IcoPlus /> Enregistrer</>}
                   </button>
                 </form>
@@ -426,10 +448,10 @@ export default function LogistiquePage() {
               <div className="table-wrapper">
                 {chargeTable.loading ? <div className="loading-center"><div className="spinner"/></div> : (
                   <table>
-                    <thead><tr><th>#</th><th>Désignation</th><th>Montant</th><th>Mois</th><th>Année</th><th>Date</th><th>Action</th></tr></thead>
+                    <thead><tr><th>#</th><th>Désignation</th><th>Montant</th><th>Mois</th><th>Année</th><th>Date</th>{suiviActif && <th>Statut</th>}<th>Action</th></tr></thead>
                     <tbody>
                       {chargeTable.data.length === 0
-                        ? <tr><td colSpan={7} style={{ textAlign:'center', padding:40, color:'#94a3b8', fontSize:13 }}>Aucune charge</td></tr>
+                        ? <tr><td colSpan={suiviActif ? 8 : 7} style={{ textAlign:'center', padding:40, color:'#94a3b8', fontSize:13 }}>Aucune charge</td></tr>
                         : chargeTable.data.map((c, i) => (
                           <tr key={c.id_charge} onClick={() => setViewingCharge(c)} style={{ cursor:'pointer' }}>
                             <td style={{ color:'#94a3b8', fontSize:12 }}>{(chargeTable.meta.current_page-1)*chargeTable.meta.per_page+i+1}</td>
@@ -437,10 +459,10 @@ export default function LogistiquePage() {
                             <td style={{ fontWeight:700, color:'var(--danger)' }}>{fmt(c.montant)} Ar</td>
                             <td style={{ fontSize:12 }}>{MOIS[c.mois]}</td>
                             <td style={{ fontSize:12, color:'#64748b' }}>{c.annee}</td>
-                            <td style={{ fontSize:12, color:'#64748b' }}>{String(c.date).slice(0,10)}</td>
+                            <td style={{ fontSize:12, color:'#64748b' }}>{String(c.date).slice(0,10)}</td>{suiviActif && <td><StatutBadge depense={c} /></td>}
                             <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
-                              <button className="btn-icon edit" onClick={() => editCharge(c)}><IcoEdit /></button>
-                              {isAdmin() && <button className="btn-icon delete" onClick={() => askDeleteCharge(c)}><IcoTrash /></button>}
+                              {(!suiviActif || modifiable(c)) && <button className="btn-icon edit" onClick={() => editCharge(c)}><IcoEdit /></button>}
+                              {isAdmin() && (!suiviActif || supprimable(c)) && <button className="btn-icon delete" onClick={() => askDeleteCharge(c)}><IcoTrash /></button>}{suiviActif && <ActionsSuivi type="charge" id={c.id_charge} libelle={c.designation} montant={c.montant} depense={c} onFait={chargeTable.reload} />}
                             </div></td>
                           </tr>
                         ))
@@ -468,7 +490,7 @@ export default function LogistiquePage() {
             ['Quantité', String(viewingAchat.quantite)],
             ['Montant', `${fmt(viewingAchat.montant)} Ar`],
             ['Date', String(viewingAchat.date_achat).slice(0,10)],
-            ['Éditeur', viewingAchat.editeur?.trim() || '—'],
+            ['Éditeur', viewingAchat.editeur?.trim() || '—'], ...(suiviActif ? lignesDetail(viewingAchat) : []),
           ]}
         />
       )}
@@ -482,7 +504,7 @@ export default function LogistiquePage() {
             ['Mois', MOIS[viewingCharge.mois]],
             ['Année', String(viewingCharge.annee)],
             ['Date', String(viewingCharge.date).slice(0,10)],
-            ['Éditeur', viewingCharge.editeur?.trim() || '—'],
+            ['Éditeur', viewingCharge.editeur?.trim() || '—'], ...(suiviActif ? lignesDetail(viewingCharge) : []),
           ]}
         />
       )}

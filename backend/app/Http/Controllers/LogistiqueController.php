@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\DepenseService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -12,6 +13,77 @@ use Illuminate\Support\Facades\DB;
 // Les règles elles-mêmes sont dans App\Services\DepenseService.
 class LogistiqueController extends BaseApiController
 {
+    // Messages français des validations d'un achat et d'une charge. Les règles
+    // elles-mêmes ne changent pas : seul le texte des refus (422) est traduit,
+    // l'application n'ayant pas de fichier de traduction.
+    private const MESSAGES_ACHAT = [
+        'nom_materiel.required'  => 'Le nom du matériel est obligatoire.',
+        'nom_materiel.string'    => 'Le nom du matériel doit être un texte.',
+        'nom_materiel.max'       => 'Le nom du matériel ne doit pas dépasser 255 caractères.',
+        'prix_unitaire.required' => 'Le prix unitaire est obligatoire.',
+        'prix_unitaire.numeric'  => 'Le prix unitaire doit être un nombre.',
+        'prix_unitaire.min'      => 'Le prix unitaire ne peut pas être négatif.',
+        'quantite.required'      => 'La quantité est obligatoire.',
+        'quantite.integer'       => 'La quantité doit être un nombre entier.',
+        'quantite.min'           => 'La quantité doit être au moins 1.',
+        'date_achat.required'    => "La date d'achat est obligatoire.",
+        'date_achat.date'        => "La date d'achat n'est pas une date valide.",
+    ];
+
+    private const MESSAGES_CHARGE = [
+        'designation.required' => 'La désignation est obligatoire.',
+        'designation.string'   => 'La désignation doit être un texte.',
+        'designation.max'      => 'La désignation ne doit pas dépasser 255 caractères.',
+        'montant.required'     => 'Le montant est obligatoire.',
+        'montant.numeric'      => 'Le montant doit être un nombre.',
+        'montant.min'          => 'Le montant ne peut pas être négatif.',
+        'mois.required'        => 'Le mois est obligatoire.',
+        'mois.integer'         => 'Le mois doit être un nombre entre 1 et 12.',
+        'mois.between'         => 'Le mois doit être un nombre entre 1 et 12.',
+        'annee.required'       => "L'année est obligatoire.",
+        'annee.integer'        => "L'année doit être un nombre entier.",
+        'annee.min'            => "L'année doit être 2000 ou plus.",
+        'date.required'        => 'La date est obligatoire.',
+        'date.date'            => "La date n'est pas une date valide.",
+    ];
+
+    // Suivi ACTIVÉ uniquement : ajoute à chaque ligne de la liste le booléen
+    // « est_auteur » — l'utilisateur connecté est-il celui qui a saisi cette
+    // dépense ? L'écran s'en sert pour proposer « Annuler » à l'auteur.
+    //  - Même comparaison que DepenseService::annuler() : l'identifiant gardé
+    //    dans matricule_s contre l'identifiant de l'utilisateur connecté,
+    //    jamais les noms affichés. Une dépense de l'ancien système n'a pas
+    //    d'identifiant d'auteur : est_auteur y est toujours faux.
+    //  - L'identifiant de l'auteur lui-même (« _auteur ») ne sort pas du
+    //    serveur : il est retiré de la réponse.
+    //  - Ce booléen ne donne aucun droit : l'annulation reste contrôlée par
+    //    DepenseService (auteur ou administrateur, statut, motif).
+    // Suivi désactivé : la réponse est renvoyée telle quelle, sans ce champ.
+    private function avecEstAuteur(JsonResponse $reponse): JsonResponse
+    {
+        if (!DepenseService::actif()) {
+            return $reponse;
+        }
+
+        $corps = $reponse->getData(true);
+        $moi   = (string) auth()->id();
+
+        foreach ($corps['data'] ?? [] as $i => $ligne) {
+            $corps['data'][$i]['est_auteur'] = $moi !== '' && (string) ($ligne['_auteur'] ?? '') === $moi;
+            unset($corps['data'][$i]['_auteur']);
+        }
+
+        return $reponse->setData($corps);
+    }
+
+    // État du suivi des dépenses, pour les écrans : ils n'affichent les
+    // statuts et les actions (valider, payer, annuler) que s'il est activé.
+    // Ne lit pas la base et ne renvoie que ce booléen.
+    public function etatSuivi()
+    {
+        return response()->json(['suivi_actif' => DepenseService::actif()]);
+    }
+
     /* ═══════════════════════════════════════════
      *  ACHAT
      * ═══════════════════════════════════════════ */
@@ -33,13 +105,13 @@ class LogistiqueController extends BaseApiController
         if (DepenseService::actif()) {
             $query->leftJoin('compte as cp', 'a.id_compte', '=', 'cp.id_compte')
                 ->addSelect('a.statut', 'a.id_compte', DB::raw("IFNULL(cp.libelle,'') as compte"),
-                    'a.date_validation', 'a.date_paiement', 'a.ancien_systeme');
+                    'a.date_validation', 'a.date_paiement', 'a.ancien_systeme', 'a.matricule_s as _auteur');
         }
 
         if ($request->filled('date_debut')) $query->whereDate('a.date_achat', '>=', $request->date_debut);
         if ($request->filled('date_fin'))   $query->whereDate('a.date_achat', '<=', $request->date_fin);
 
-        return $this->paginate($query, $request, ['a.nom_materiel'], 'a.id_achat');
+        return $this->avecEstAuteur($this->paginate($query, $request, ['a.nom_materiel'], 'a.id_achat'));
     }
 
     public function storeAchat(Request $request)
@@ -49,7 +121,7 @@ class LogistiqueController extends BaseApiController
             'prix_unitaire' => 'required|numeric|min:0',
             'quantite'      => 'required|integer|min:1',
             'date_achat'    => 'required|date',
-        ]);
+        ], self::MESSAGES_ACHAT);
 
         $id = DB::transaction(function () use ($request) {
             $id = DB::table('achat')->insertGetId([
@@ -83,7 +155,7 @@ class LogistiqueController extends BaseApiController
             'prix_unitaire' => 'required|numeric|min:0',
             'quantite'      => 'required|integer|min:1',
             'date_achat'    => 'required|date',
-        ]);
+        ], self::MESSAGES_ACHAT);
 
         DB::transaction(function () use ($request, $id) {
             // Toujours appelé : l'autorisation (auteur ou admin) ne dépend pas
@@ -145,7 +217,7 @@ class LogistiqueController extends BaseApiController
         if (DepenseService::actif()) {
             $query->leftJoin('compte as cp', 'c.id_compte', '=', 'cp.id_compte')
                 ->addSelect('c.statut', 'c.id_compte', DB::raw("IFNULL(cp.libelle,'') as compte"),
-                    'c.date_validation', 'c.date_paiement', 'c.ancien_systeme');
+                    'c.date_validation', 'c.date_paiement', 'c.ancien_systeme', 'c.matricule_s as _auteur');
         }
 
         if ($request->filled('mois'))       $query->where('c.mois',  $request->mois);
@@ -153,7 +225,7 @@ class LogistiqueController extends BaseApiController
         if ($request->filled('date_debut')) $query->whereDate('c.date', '>=', $request->date_debut);
         if ($request->filled('date_fin'))   $query->whereDate('c.date', '<=', $request->date_fin);
 
-        return $this->paginate($query, $request, ['c.designation'], 'c.id_charge');
+        return $this->avecEstAuteur($this->paginate($query, $request, ['c.designation'], 'c.id_charge'));
     }
 
     public function storeCharge(Request $request)
@@ -164,7 +236,7 @@ class LogistiqueController extends BaseApiController
             'mois'        => 'required|integer|between:1,12',
             'annee'       => 'required|integer|min:2000',
             'date'        => 'required|date',
-        ]);
+        ], self::MESSAGES_CHARGE);
 
         $id = DB::transaction(function () use ($request) {
             $id = DB::table('charge')->insertGetId([
@@ -198,7 +270,7 @@ class LogistiqueController extends BaseApiController
             'mois'        => 'required|integer|between:1,12',
             'annee'       => 'required|integer|min:2000',
             'date'        => 'required|date',
-        ]);
+        ], self::MESSAGES_CHARGE);
 
         DB::transaction(function () use ($request, $id) {
             // Toujours appelé (voir updateAchat).

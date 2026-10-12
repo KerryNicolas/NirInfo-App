@@ -132,6 +132,11 @@ Route::middleware(['auth:sanctum', 'admin.delete'])->group(function () {
     // ── Suivi des dépenses : valider, payer, annuler, historique ──
     // Actif seulement si DEPENSES_WORKFLOW=true (config/depenses.php) ; sinon
     // ces routes répondent 409. Aucune route existante n'est modifiée.
+    // État du suivi (lecture seule) : un simple booléen, pour que les écrans
+    // sachent s'ils doivent afficher les statuts et les actions.
+    Route::get('/depenses/etat', [LogistiqueController::class, 'etatSuivi'])
+        ->middleware('permission:logistique.access');
+
     foreach (['achats' => 'Achat', 'charges' => 'Charge'] as $prefixe => $nom) {
         Route::post("/{$prefixe}/{id}/valider",          [LogistiqueController::class, "valider{$nom}"])
             ->middleware('permission:depenses.valider');

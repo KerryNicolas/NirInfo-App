@@ -7,6 +7,7 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 import { useAuth } from '../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoInfo, IcoSave, IcoX } from '../../components/icons'
 import { formatMontantInput, parseMontantInput } from '../../utils/validators'
+import { messageErreur } from '../../utils/apiError'
 
 interface Gestion {
   id_transaction: number; transaction_type: 'E' | 'S'; amount: number
@@ -71,14 +72,14 @@ export default function GererTab() {
       }
       reset()
       table.reload()
-    } catch (err: any) { toast.error(err.response?.data?.message || "Erreur lors de l'enregistrement") }
+    } catch (err) { toast.error(messageErreur(err, "Erreur lors de l'enregistrement")) }
     finally { setSaving(false) }
   }
 
   const handleDelete = async () => {
     if (!confirmDeleteId) return
     try { await api.delete(`/gerer/${confirmDeleteId}`); toast.success('Opération supprimée'); table.reload() }
-    catch { toast.error('Erreur lors de la suppression') }
+    catch (err) { toast.error(messageErreur(err, 'Erreur lors de la suppression')) }
     finally { setConfirmDeleteId(null) }
   }
 

@@ -3,6 +3,7 @@ import Sidebar from '../../components/Sidebar'
 import CompteTab from './CompteTab'
 import GererTab from './GererTab'
 import TransferTab from './TransferTab'
+import TresorerieTab from './TresorerieTab'
 
 export default function BudgetsPage() {
   return (
@@ -17,6 +18,7 @@ export default function BudgetsPage() {
             <Route path="comptes"    element={<CompteTab />} />
             <Route path="gerer"      element={<GererTab />} />
             <Route path="transferts" element={<TransferTab />} />
+            <Route path="tresorerie" element={<TresorerieTab />} />
             <Route path="*" element={<Navigate to="/budgets/comptes" replace />} />
           </Routes>
         </div>

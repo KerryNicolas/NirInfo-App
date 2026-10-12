@@ -40,6 +40,22 @@ class GererController extends BaseApiController
         'suppression inscription #', 'suppression recouvrement #',
     ];
 
+    // Messages français de la validation d'une opération manuelle. Les règles
+    // ne changent pas : seul le texte des refus (422) est traduit.
+    private const MESSAGES_VALIDATION = [
+        'compte.required'  => 'Choisissez un compte.',
+        'compte.integer'   => "Le compte choisi n'existe pas.",
+        'compte.exists'    => "Le compte choisi n'existe pas.",
+        'type.required'    => "Le type d'opération est obligatoire.",
+        'type.in'          => "Le type d'opération doit être un dépôt ou un retrait.",
+        'montant.required' => 'Le montant est obligatoire.',
+        'montant.numeric'  => 'Le montant doit être un nombre.',
+        'montant.min'      => 'Le montant doit être supérieur à 0.',
+        'raison.required'  => 'Le motif est obligatoire.',
+        'raison.string'    => 'Le motif doit être un texte.',
+        'raison.max'       => 'Le motif ne doit pas dépasser 255 caractères.',
+    ];
+
     private function refusSiMotifReserve(?string $raison)
     {
         $motif = mb_strtolower(trim((string) $raison));
@@ -101,7 +117,7 @@ class GererController extends BaseApiController
             'type'    => 'required|in:E,S',
             'montant' => 'required|numeric|min:1',
             'raison'  => 'required|string|max:255',
-        ]);
+        ], self::MESSAGES_VALIDATION);
 
         if ($refus = $this->refusSiMotifReserve($request->raison)) return $refus;
 
@@ -141,7 +157,7 @@ class GererController extends BaseApiController
             'type'    => 'required|in:E,S',
             'montant' => 'required|numeric|min:1',
             'raison'  => 'required|string|max:255',
-        ]);
+        ], self::MESSAGES_VALIDATION);
 
         if ($refus = $this->refusSiMotifReserve($request->raison)) return $refus;
 
