@@ -101,7 +101,8 @@ class EstAuteurTest extends TestCase
         $second  = $this->creer('achats', $this->auteur);
 
         $r = $this->actingAs($this->auteur)->getJson('/api/achats?per_page=1&search=TEST-EST-AUTEUR&sort=a.id_achat&sort_dir=asc')->assertOk()->json();
-        $this->assertSame(['data', 'total', 'per_page', 'current_page', 'last_page', 'from', 'to'], array_keys($r));
+        // Les sept champs de la pagination, inchangés et dans le même ordre, suivis des deux totaux de la liste.
+        $this->assertSame(['data', 'total', 'per_page', 'current_page', 'last_page', 'from', 'to', 'total_montant', 'total_actif'], array_keys($r));
         $this->assertSame([2, 1, 1, 2, 1, 1], [$r['total'], $r['per_page'], $r['current_page'], $r['last_page'], $r['from'], $r['to']]);
         $this->assertSame($premier, $r['data'][0]['id_achat']);
         $this->assertSame('2000.00', $r['data'][0]['montant'], 'Les montants gardent leur forme (texte à deux décimales).');

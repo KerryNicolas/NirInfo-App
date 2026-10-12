@@ -31,6 +31,13 @@ export interface UseTableReturn<T> {
   isValidating: boolean
   error:       string | null
   meta:        TableMeta
+  /**
+   * Champs de la réponse autres que les lignes et la pagination (par exemple
+   * un total calculé par le serveur). Ils viennent de la MÊME réponse que
+   * « data » : lignes et totaux sont donc toujours ceux d'une même lecture.
+   * Objet vide si le serveur n'en envoie pas.
+   */
+  extra:       Record<string, unknown>
   search:      string
   sortCol:     string
   sortDir:     'asc' | 'desc'
@@ -56,8 +63,12 @@ type FetchOpts = {
 type CacheEntry<T> = {
   data: T[]
   meta: TableMeta
+  extra: Record<string, unknown>
   timestamp: number
 }
+
+// Champs de la réponse déjà rangés dans « data » et « meta » : tout le reste va dans « extra ».
+const CHAMPS_PAGINATION = ['data', 'total', 'per_page', 'current_page', 'last_page', 'from', 'to']
 
 // Cache global partagé entre tous les composants qui utilisent le même endpoint.
 // Évite de re-fetcher quand on navigue entre onglets puis qu'on revient.
@@ -65,6 +76,15 @@ const globalCache = new Map<string, CacheEntry<unknown>>()
 
 function buildKey(endpoint: string, opts: FetchOpts): string {
   return `${endpoint}::${JSON.stringify(opts)}`
+}
+
+// Une clé est « <endpoint>::<options en JSON> », et ce JSON commence toujours
+// par « { » : l'endpoint d'une clé est donc tout ce qui précède le premier
+// « ::{ ». Il se compare EN ENTIER, jamais par préfixe : « /sessions » ne
+// désigne pas « /sessions/en-cours ».
+function endpointDeLaCle(cle: string): string {
+  const fin = cle.indexOf('::{')
+  return fin === -1 ? cle : cle.slice(0, fin)
 }
 
 export function useTable<T = Record<string, unknown>>(
@@ -87,6 +107,7 @@ export function useTable<T = Record<string, unknown>>(
   const [isValidating, setIsValidating] = useState(false)
   const [error,        setError]       = useState<string | null>(null)
   const [meta,         setMeta]        = useState<TableMeta>(DEFAULT_META)
+  const [extra,        setExtra]       = useState<Record<string, unknown>>({})
   const [search,       setSearchRaw]   = useState('')
   const [page,         setPageRaw]     = useState(1)
   const [perPage,      setPerPageRaw]  = useState(initPerPage)
@@ -105,8 +126,10 @@ export function useTable<T = Record<string, unknown>>(
   const applyResult = useCallback((d: any, opts: FetchOpts): CacheEntry<T> => {
     let newData: T[]
     let newMeta: TableMeta
+    let newExtra: Record<string, unknown> = {}
     if (d && d.data !== undefined) {
       newData = d.data
+      newExtra = Object.fromEntries(Object.entries(d).filter(([champ]) => !CHAMPS_PAGINATION.includes(champ)))
       newMeta = {
         total:        d.total        ?? d.data.length,
         per_page:     d.per_page     ?? opts.perPage,
@@ -120,7 +143,7 @@ export function useTable<T = Record<string, unknown>>(
       newData = arr
       newMeta = { ...DEFAULT_META, total: arr.length, per_page: opts.perPage }
     }
-    return { data: newData, meta: newMeta, timestamp: Date.now() }
+    return { data: newData, meta: newMeta, extra: newExtra, timestamp: Date.now() }
   }, [])
 
   const rawFetch = useCallback(async (opts: FetchOpts, signal?: AbortSignal) => {
@@ -162,6 +185,7 @@ export function useTable<T = Record<string, unknown>>(
       // Affichage immédiat depuis le cache — 0 latence perçue
       setData(cached.data)
       setMeta(cached.meta)
+      setExtra(cached.extra)
       setInitialLoad(false)
       setError(null)
       const isFresh = Date.now() - cached.timestamp < staleTime
@@ -183,6 +207,7 @@ export function useTable<T = Record<string, unknown>>(
       globalCache.set(key, entry as CacheEntry<unknown>)
       setData(entry.data)
       setMeta(entry.meta)
+      setExtra(entry.extra)
       setInitialLoad(false)
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === 'CanceledError' || (err as { name?: string })?.name === 'AbortError') {
@@ -192,6 +217,7 @@ export function useTable<T = Record<string, unknown>>(
       if (!cached) {
         setError(msg)
         setData([])
+        setExtra({})
       }
       // si on avait du cache, on le laisse affiché plutôt que de vider l'écran sur une erreur de revalidation
     } finally {
@@ -264,8 +290,17 @@ export function useTable<T = Record<string, unknown>>(
 
   const reload = useCallback(() => {
     const s = stateRef.current
-    const key = buildKey(endpoint, { page: s.page, perPage: s.perPage, search: s.search, sortCol: s.sortCol, sortDir: s.sortDir, extraParams: s.extraParams })
-    globalCache.delete(key) // force un vrai refetch réseau, pas juste relire le cache
+    // FIX : reload() est appelé après une création, une modification ou une
+    // suppression. Ce ne sont alors pas seulement les lignes de la page
+    // affichée qui sont périmées, mais TOUTES les variantes en cache de cette
+    // liste (autres pages, autres filtres, autre recherche, autre tri : lignes
+    // décalées, totaux changés). Avant, seule la page affichée était oubliée,
+    // et les autres restaient servies telles quelles pendant 30 s.
+    // Seules les clés de CET endpoint sont oubliées : les autres listes gardent
+    // leur cache.
+    for (const cle of [...globalCache.keys()]) {
+      if (endpointDeLaCle(cle) === endpoint) globalCache.delete(cle) // force un vrai refetch réseau, pas juste relire le cache
+    }
     fetchData({ page: s.page, perPage: s.perPage, search: s.search, sortCol: s.sortCol, sortDir: s.sortDir, extraParams: s.extraParams })
   }, [fetchData, endpoint])
 
@@ -276,7 +311,7 @@ export function useTable<T = Record<string, unknown>>(
   }, [fetchData, perPage, initSort, initDir, extraParamsInit])
 
   return {
-    data, loading, initialLoad, isValidating, error, meta,
+    data, loading, initialLoad, isValidating, error, meta, extra,
     search, sortCol, sortDir,
     setSearch, setPage, setSort, setPerPage,
     setParams,

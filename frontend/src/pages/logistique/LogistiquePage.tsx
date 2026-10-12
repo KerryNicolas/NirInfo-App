@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { IcoCart, IcoCharge, IcoEdit, IcoPlus, IcoSave, IcoTrash, IcoX, IcoExport } from '../../components/icons'
 import { formatMontantInput, parseMontantInput } from '../../utils/validators'
 import { messageErreur } from '../../utils/apiError'
+import { telechargerCsv } from '../../utils/csv'
 import { ActionsSuivi, AvisModificationValidee, StatutBadge, lignesDetail, modifiable, supprimable, useSuiviActif, type SuiviChamps } from './suivi/SuiviDepenses'
 
 type Tab    = 'achat' | 'charge'
@@ -34,6 +35,90 @@ const montantPourChamp = (v: number | string | null | undefined): string => {
   if (v === null || v === undefined || String(v).trim() === '') return ''
   const n = Number(v)
   return Number.isFinite(n) ? formatMontantInput(String(Math.round(n))) : ''
+}
+
+// FIX : le total affiché était la somme des 15 lignes de la page, présentée
+// comme le total de la liste. Il vient maintenant du serveur, qui le calcule
+// sur TOUTES les lignes répondant aux filtres et à la recherche, et le joint à
+// la réponse de la liste (useTable : « extra ») : lignes et totaux affichés
+// viennent donc de la même réponse.
+//  - total_montant : toutes les lignes enregistrées (annulées comprises) ;
+//  - total_actif   : suivi activé uniquement — sans les dépenses annulées.
+type Filtres = Record<string, string | number>
+interface TotauxListe { total_montant: number; total_actif?: number }
+
+const nombreFini = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** Totaux joints par le serveur à la liste ; null tant qu'ils ne sont pas connus. */
+const lireTotaux = (extra: Record<string, unknown>): TotauxListe | null =>
+  nombreFini(extra.total_montant)
+    ? { total_montant: extra.total_montant, total_actif: nombreFini(extra.total_actif) ? extra.total_actif : undefined }
+    : null
+
+/** Total(aux) d'une liste, toutes pages confondues. Un chiffre inconnu s'affiche « … », jamais un total partiel. */
+function Totaux({ totaux, suivi, couleur }: { totaux: TotauxListe | null; suivi: boolean; couleur: string }) {
+  const style = { marginLeft:10, paddingLeft:10, borderLeft:'1px solid var(--border)', color: couleur, fontWeight:700 } as const
+  if (!totaux) return <span style={style} data-total="inconnu">Total : …</span>
+  // Suivi désactivé : un seul total, comme avant — mais sur toute la liste.
+  if (!suivi || totaux.total_actif === undefined) {
+    return <span style={style} data-total="general" title="Somme de toutes les lignes de la liste, toutes pages confondues">Total : {fmt(totaux.total_montant)} Ar</span>
+  }
+  return (
+    <>
+      <span style={style} data-total="actif" title="Toutes les dépenses de la liste sauf les dépenses annulées, toutes pages confondues">
+        Dépenses actives : {fmt(totaux.total_actif)} Ar
+      </span>
+      <span style={{ ...style, color:'#64748b', fontWeight:600 }} data-total="enregistre" title="Toutes les lignes enregistrées, dépenses annulées comprises, toutes pages confondues">
+        Total enregistré : {fmt(totaux.total_montant)} Ar
+      </span>
+    </>
+  )
+}
+
+/** L'export a été abandonné : aucun fichier n'est produit. Le message est destiné à l'utilisateur. */
+class ExportAbandonne extends Error {}
+
+/** Montant en centimes entiers : les sommes se comparent alors exactement, sans erreur d'arrondi. */
+const centimes = (v: unknown): number => Math.round(Number(v) * 100)
+
+/**
+ * Lignes à exporter, lues en UN appel. Le serveur les lit dans une seule
+ * transaction, avec leur nombre et leurs totaux : tout vient de la même image
+ * de la base. Avant de les rendre, on vérifie que la réponse se tient :
+ * structure, nombre de lignes, numéros uniques, et totaux égaux à la somme des
+ * lignes reçues. Au moindre écart, l'export est abandonné.
+ * Le tri est celui du serveur (numéro de ligne décroissant).
+ */
+async function lireExport<T extends { montant: number | string; statut?: string }>(
+  endpoint: string, filtres: Filtres, recherche: string, numero: (ligne: T) => number,
+): Promise<T[]> {
+  const abandon = (raison: string) => new ExportAbandonne(`${raison} Aucun fichier n'a été créé.`)
+  const params: Filtres = { ...filtres }
+  if (recherche) params.search = recherche
+
+  const d = (await api.get(endpoint, { params })).data
+  if (!d || !Array.isArray(d.data) || !Number.isInteger(d.total) || !nombreFini(d.total_montant)
+      || (d.total_actif !== undefined && !nombreFini(d.total_actif))) {
+    throw abandon('Réponse inattendue du serveur.')
+  }
+
+  const lignes = d.data as T[]
+  if (lignes.length !== d.total) throw abandon(`Le serveur annonce ${d.total} lignes et en a envoyé ${lignes.length}.`)
+
+  const numeros = new Set<number>()
+  let somme = 0, actif = 0
+  for (const ligne of lignes) {
+    const id = numero(ligne), montant = centimes(ligne.montant)
+    if (!Number.isInteger(id) || numeros.has(id)) throw abandon('Une ligne reçue est illisible ou en double.')
+    if (!Number.isFinite(montant)) throw abandon('Un montant reçu est illisible.')
+    numeros.add(id)
+    somme += montant
+    if (ligne.statut !== 'annulee') actif += montant
+  }
+  if (somme !== centimes(d.total_montant)) throw abandon('Le total ne correspond pas aux lignes reçues.')
+  if (d.total_actif !== undefined && actif !== centimes(d.total_actif)) throw abandon('Le total des dépenses actives ne correspond pas aux lignes reçues.')
+
+  return lignes
 }
 
 // FIX : navItems ne sert plus qu'à la barre d'onglets pilule en haut du
@@ -86,6 +171,10 @@ export default function LogistiquePage() {
   const [achatAnnee,     setAchatAnnee]     = useState('')
   const [achatDateDebut, setAchatDateDebut] = useState('')
   const [achatDateFin,   setAchatDateFin]   = useState('')
+  // Filtres réellement envoyés au serveur : repris tels quels par l'export.
+  const [achatParams,    setAchatParams]    = useState<Filtres>({})
+  const [chargeParams,   setChargeParams]   = useState<Filtres>({})
+  const [exportEnCours,  setExportEnCours]  = useState(false)
 
   const applyAchatFilters = (mois: string, annee: string, debut: string, fin: string) => {
     const params: Record<string, string | number> = {}
@@ -93,12 +182,12 @@ export default function LogistiquePage() {
     if (annee !== '')  params.annee      = Number(annee)
     if (debut !== '')  params.date_debut = debut
     if (fin   !== '')  params.date_fin   = fin
-    achatTable.setParams(params)
+    achatTable.setParams(params); setAchatParams(params)
   }
 
   const resetAchatFilters = () => {
     setAchatMois('0'); setAchatAnnee(''); setAchatDateDebut(''); setAchatDateFin('')
-    achatTable.setParams({})
+    achatTable.setParams({}); setAchatParams({})
   }
 
   const achatFiltered = achatMois !== '0' || achatAnnee !== '' || achatDateDebut !== '' || achatDateFin !== ''
@@ -110,16 +199,16 @@ export default function LogistiquePage() {
     const params: Record<string, string | number> = {}
     if (mois  !== '0') params.mois  = Number(mois)
     if (annee !== '')  params.annee = Number(annee)
-    chargeTable.setParams(params)
+    chargeTable.setParams(params); setChargeParams(params)
   }
 
   const resetChargeFilters = () => {
     setMoisFilter('0'); setAnneeFilter('')
-    chargeTable.setParams({})
+    chargeTable.setParams({}); setChargeParams({})
   }
 
-  const totalAchat  = achatTable.data.reduce((s, a) => s + Number(a.montant), 0)
-  const totalCharge = chargeTable.data.reduce((s, c) => s + Number(c.montant), 0)
+  const totauxAchat  = lireTotaux(achatTable.extra)
+  const totauxCharge = lireTotaux(chargeTable.extra)
   const [viewingAchat,  setViewingAchat]  = useState<Achat | null>(null)
   const [viewingCharge, setViewingCharge] = useState<Charge | null>(null)
 
@@ -201,14 +290,34 @@ export default function LogistiquePage() {
     }
   }
 
-  const exportAchats = () => {
-    const rows = [['#','Matériel','Prix unit.','Qté','Montant','Date'], ...achatTable.data.map((a,i)=>[i+1,a.nom_materiel,a.prix_unitaire,a.quantite,a.montant,a.date_achat])]
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(r=>r.join(';')).join('\n')],{type:'text/csv'})); a.download='achats.csv'; a.click()
+  // FIX : l'export ne contenait que la page affichée, et un texte contenant un
+  // point-virgule décalait les colonnes. Il demande maintenant au serveur, en
+  // un seul appel, TOUTES les lignes de la liste pour les filtres et la
+  // recherche en cours, de la plus récente à la plus ancienne. Suivi activé,
+  // une colonne « Statut » distingue les dépenses annulées. Aucun fichier n'est
+  // créé si l'appel échoue ou si la réponse ne se tient pas (voir lireExport).
+  const exporter = async (travail: () => Promise<void>) => {
+    setExportEnCours(true)
+    try { await travail() }
+    catch (err) { toast.error(err instanceof ExportAbandonne ? err.message : messageErreur(err, "Erreur lors de l'export")) }
+    finally { setExportEnCours(false) }
   }
-  const exportCharges = () => {
-    const rows = [['#','Désignation','Montant','Mois','Année','Date'], ...chargeTable.data.map((c,i)=>[i+1,c.designation,c.montant,MOIS[c.mois],c.annee,c.date])]
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(r=>r.join(';')).join('\n')],{type:'text/csv'})); a.download='charges.csv'; a.click()
-  }
+  const exportAchats = () => exporter(async () => {
+    const lignes = await lireExport<Achat>('/achats/export', achatParams, achatTable.search, a => a.id_achat)
+    if (lignes.length === 0) { toast.error('Aucune donnée à exporter'); return }
+    telechargerCsv('achats.csv', [
+      ['#','Matériel','Prix unit.','Qté','Montant','Date', ...(suiviActif ? ['Statut'] : [])],
+      ...lignes.map((a,i) => [i+1, a.nom_materiel, a.prix_unitaire, a.quantite, a.montant, a.date_achat, ...(suiviActif ? [a.statut ?? ''] : [])]),
+    ])
+  })
+  const exportCharges = () => exporter(async () => {
+    const lignes = await lireExport<Charge>('/charges/export', chargeParams, chargeTable.search, c => c.id_charge)
+    if (lignes.length === 0) { toast.error('Aucune donnée à exporter'); return }
+    telechargerCsv('charges.csv', [
+      ['#','Désignation','Montant','Mois','Année','Date', ...(suiviActif ? ['Statut'] : [])],
+      ...lignes.map((c,i) => [i+1, c.designation, c.montant, MOIS[c.mois], c.annee, c.date, ...(suiviActif ? [c.statut ?? ''] : [])]),
+    ])
+  })
 
   const montantCalc = (Number(parseMontantInput(formA.prix_unitaire))||0) * (Number(formA.quantite)||0)
 
@@ -304,9 +413,7 @@ export default function LogistiquePage() {
                   <div className="section-count">
                     {achatTable.meta.total} achat{achatTable.meta.total>1?'s':''}
                     {achatLabel && <> · {achatLabel}</>}
-                    <span style={{ marginLeft:10, paddingLeft:10, borderLeft:'1px solid var(--border)', color:'var(--accent)', fontWeight:700 }}>
-                      Total : {fmt(totalAchat)} Ar
-                    </span>
+                    <Totaux totaux={totauxAchat} suivi={suiviActif} couleur="var(--accent)" />
                   </div>
                 </div>
                 <div className="search-bar">
@@ -332,7 +439,7 @@ export default function LogistiquePage() {
                   onChange={e => { setAchatDateFin(e.target.value); applyAchatFilters(achatMois, achatAnnee, achatDateDebut, e.target.value) }}
                   style={fltInput} title="Date fin" />
                 {achatFiltered && <button onClick={resetAchatFilters} style={btnReset}>✕ Reset</button>}
-                <button onClick={exportAchats} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, background:'#f0fdf4', color:'#16a34a', border:'1px solid #bbf7d0', borderRadius:7, padding:'7px 12px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoExport /> Export</button>
+                <button onClick={exportAchats} disabled={exportEnCours} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, background:'#f0fdf4', color:'#16a34a', border:'1px solid #bbf7d0', borderRadius:7, padding:'7px 12px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoExport /> Export</button>
               </div>
 
               <div className="table-wrapper">
@@ -421,9 +528,7 @@ export default function LogistiquePage() {
                   <div className="section-count">
                     {chargeTable.meta.total} charge{chargeTable.meta.total>1?'s':''}
                     {chargeLabel && <> · {chargeLabel}</>}
-                    <span style={{ marginLeft:10, paddingLeft:10, borderLeft:'1px solid var(--border)', color:'var(--danger)', fontWeight:700 }}>
-                      Total : {fmt(totalCharge)} Ar
-                    </span>
+                    <Totaux totaux={totauxCharge} suivi={suiviActif} couleur="var(--danger)" />
                   </div>
                 </div>
                 <div className="search-bar">
@@ -442,7 +547,7 @@ export default function LogistiquePage() {
                   onChange={e => { setAnneeFilter(e.target.value); applyChargeFilters(moisFilter, e.target.value) }}
                   style={{ ...fltInput, width:75 }} />
                 {(moisFilter !== '0' || anneeFilter !== '') && <button onClick={resetChargeFilters} style={btnReset}>✕ Reset</button>}
-                <button onClick={exportCharges} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, background:'#f0fdf4', color:'#16a34a', border:'1px solid #bbf7d0', borderRadius:7, padding:'7px 12px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoExport /> Export</button>
+                <button onClick={exportCharges} disabled={exportEnCours} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, background:'#f0fdf4', color:'#16a34a', border:'1px solid #bbf7d0', borderRadius:7, padding:'7px 12px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}><IcoExport /> Export</button>
               </div>
 
               <div className="table-wrapper">

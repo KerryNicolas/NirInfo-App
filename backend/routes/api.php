@@ -129,6 +129,12 @@ Route::middleware(['auth:sanctum', 'admin.delete'])->group(function () {
     Route::put   ('/charges/{id}',         [LogistiqueController::class, 'updateCharge']);
     Route::delete('/charges/{id}',         [LogistiqueController::class, 'destroyCharge']);
 
+    // Export (lecture seule) : toutes les lignes répondant aux filtres, leur
+    // nombre et leurs totaux, lus dans une seule transaction. Mêmes droits que
+    // les listes ci-dessus, dont il renvoie exactement les données.
+    Route::get('/achats/export',  [LogistiqueController::class, 'exportAchats']);
+    Route::get('/charges/export', [LogistiqueController::class, 'exportCharges']);
+
     // ── Suivi des dépenses : valider, payer, annuler, historique ──
     // Actif seulement si DEPENSES_WORKFLOW=true (config/depenses.php) ; sinon
     // ces routes répondent 409. Aucune route existante n'est modifiée.

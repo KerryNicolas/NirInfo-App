@@ -10,6 +10,7 @@
 // Usage : php ouvrier_concurrence.php '<json>'
 //   action   : payer | annuler-paiement | virement | retrait | supprimer-virement
 //              | supprimer-gestion | croises | ecrivain | lecteur
+//              | export | export-temoin
 //   attendre : fichier dont on attend l'apparition avant de commencer
 //   emettre  : fichier créé une fois l'opération faite (transaction encore ouverte)
 //   maintien : durée, en ms, pendant laquelle la transaction reste ouverte
@@ -17,6 +18,7 @@
 // Répond par UNE ligne JSON : { ok, statut, message, attente_ms, … }.
 
 use App\Http\Controllers\GererController;
+use App\Http\Controllers\LogistiqueController;
 use App\Services\DepenseService;
 use App\Services\IndicateursTresorerieService;
 use App\Services\TresorerieService;
@@ -100,6 +102,44 @@ if ($action === 'lecteur') {
         $d > $d0 ? $vuePayee++ : $vueEngagee++;
     }
     $repondre(['ok' => $incoherentes === 0, 'lectures' => $lectures, 'incoherentes' => $incoherentes, 'vue_payee' => $vuePayee, 'vue_engagee' => $vueEngagee, 'exemple' => $exemple]);
+}
+
+/* ── export : une seule image de la base, du début à la fin de la lecture ── */
+
+if ($action === 'export' || $action === 'export-temoin') {
+    // Dès la PREMIÈRE lecture de la table des achats, on s'arrête : on prévient
+    // le test (« emettre ») et on attend qu'il ait inséré et VALIDÉ une nouvelle
+    // dépense (« attendre »). Toutes les lectures suivantes ont donc lieu APRÈS
+    // cette insertion. Aucune temporisation : seuls les deux signaux rythment
+    // le scénario.
+    $premiere = true;
+    DB::listen(function ($requete) use (&$premiere, $a, $attendre) {
+        if ($premiere && str_contains($requete->sql, '`achat`')) {
+            $premiere = false;
+            touch($a['emettre']);
+            $attendre($a['attendre']);
+        }
+    });
+
+    if ($action === 'export') {
+        // Le vrai export de l'application, avec sa transaction.
+        $d = app(LogistiqueController::class)->exportAchats(Request::create('/x', 'GET', ['search' => $a['recherche']]))->getData(true);
+        [$annonce, $lignes, $total] = [$d['total'], $d['data'], $d['total_montant']];
+    } else {
+        // Témoin : les mêmes lectures SANS transaction. Elles doivent se
+        // contredire — sinon le scénario ne prouverait rien.
+        $q = fn () => DB::table('achat as a')->where('a.nom_materiel', 'like', '%' . $a['recherche'] . '%');
+        $annonce = $q()->count();
+        $total   = $q()->sum('a.montant');
+        $lignes  = $q()->get()->map(fn ($l) => (array) $l)->all();
+    }
+
+    $repondre([
+        'ok' => true, 'annonce' => $annonce, 'recues' => count($lignes),
+        'total_montant' => (float) $total, 'somme' => (float) array_sum(array_column($lignes, 'montant')),
+        // Lu APRÈS l'export : la dépense insérée pendant la lecture est bien dans la base.
+        'apres' => DB::table('achat')->where('nom_materiel', 'like', '%' . $a['recherche'] . '%')->count(),
+    ]);
 }
 
 /* ── opérations uniques, dans une transaction qui peut être gardée ouverte ── */

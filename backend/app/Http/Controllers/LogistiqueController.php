@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\DepenseService;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -85,9 +86,110 @@ class LogistiqueController extends BaseApiController
     }
 
     /* ═══════════════════════════════════════════
+     *  LISTES, TOTAUX ET EXPORTS (achats et charges)
+     *
+     *  FIX : l'écran additionnait les lignes de la page affichée et présentait
+     *  ce chiffre comme le total de la liste (« 299 achats — Total : 324 700 Ar »
+     *  pour les 15 premières lignes), et son export ne contenait que cette page.
+     *
+     *  Une SEULE requête filtrée par type de dépense (requeteAchats(),
+     *  requeteCharges()) sert maintenant à la liste, à ses totaux et à
+     *  l'export : filtres et recherche ne sont écrits qu'une fois et ne
+     *  peuvent pas diverger.
+     *
+     *  Toutes les lectures d'une même réponse se font dans UNE transaction :
+     *  avec InnoDB en REPEATABLE READ, elles voient la même image de la base
+     *  (même procédé que IndicateursTresorerieService::indicateurs()). Aucun
+     *  verrou n'est posé : ces lectures ne bloquent aucune écriture.
+     * ═══════════════════════════════════════════ */
+
+    /** Recherche « contient » sur les colonnes données — la même règle que BaseApiController::paginate(). */
+    private function rechercher(Builder $query, Request $request, array $colonnes): Builder
+    {
+        if ($request->filled('search')) {
+            $q = $request->search;
+            $query->where(function ($sub) use ($q, $colonnes) {
+                foreach ($colonnes as $col) {
+                    $sub->orWhere($col, 'like', "%{$q}%");
+                }
+            });
+        }
+
+        return $query;
+    }
+
+    // Totaux de TOUTES les lignes de la requête filtrée, jamais d'une page.
+    //  - total_montant : toutes les lignes enregistrées, dépenses annulées
+    //    comprises. TOUJOURS renvoyé ; ne lit aucune colonne du suivi.
+    //  - total_actif   : suivi ACTIVÉ uniquement — les mêmes lignes, moins les
+    //    dépenses annulées. Suivi désactivé, ce champ n'existe pas.
+    // Travaille sur des copies : la requête reçue n'est pas modifiée.
+    private function totaux(Builder $query, string $alias): array
+    {
+        $totaux = ['total_montant' => (float) (clone $query)->sum("{$alias}.montant")];
+
+        if (DepenseService::actif()) {
+            $totaux['total_actif'] = (float) (clone $query)
+                ->whereRaw("COALESCE({$alias}.statut, '') <> ?", [DepenseService::ANNULEE])
+                ->sum("{$alias}.montant");
+        }
+
+        return $totaux;
+    }
+
+    // Liste paginée + totaux de toute la liste. La recherche est déjà dans la
+    // requête : paginate() n'en reçoit donc aucune colonne (sinon elle serait
+    // appliquée deux fois). La réponse garde ses sept champs de pagination ;
+    // les totaux s'y ajoutent.
+    private function liste(Request $request, Builder $query, string $alias, string $cle): JsonResponse
+    {
+        return DB::transaction(function () use ($request, $query, $alias, $cle) {
+            $totaux  = $this->totaux($query, $alias);
+            $reponse = $this->avecEstAuteur($this->paginate($query, $request, [], $cle));
+
+            return $reponse->setData($reponse->getData(true) + $totaux);
+        });
+    }
+
+    /** Nombre maximal de lignes d'un export : config/depenses.php, clé « export_max » (20 000 si elle est absente). */
+    private function exportMax(): int
+    {
+        return max(1, (int) config('depenses.export_max', 20000));
+    }
+
+    // Export : TOUTES les lignes de la requête filtrée, leur nombre et leurs
+    // totaux, dans UNE réponse et UNE transaction. L'écran en fait un fichier
+    // CSV, après avoir vérifié que lignes, nombre et totaux concordent.
+    //  - Mêmes champs que la liste (est_auteur compris, jamais « _auteur »).
+    //  - Tri sur le numéro de la ligne, unique, du plus récent au plus ancien.
+    //  - Au-delà du plafond, refus explicite : la réponse entière est tenue en
+    //    mémoire par le serveur puis par le navigateur.
+    private function exporter(Builder $query, string $alias, string $cle): JsonResponse
+    {
+        return DB::transaction(function () use ($query, $alias, $cle) {
+            $nombre = (clone $query)->count();
+            $max    = $this->exportMax();
+
+            if ($nombre > $max) {
+                return $this->err(sprintf(
+                    "L'export est limité à %s lignes, et %s lignes correspondent à ces filtres. Réduisez la période ou précisez la recherche.",
+                    number_format($max, 0, ',', ' '),
+                    number_format($nombre, 0, ',', ' ')
+                ), 422);
+            }
+
+            $totaux = $this->totaux($query, $alias);
+            $lignes = (clone $query)->orderBy($cle, 'desc')->get();
+
+            return $this->avecEstAuteur(response()->json(['data' => $lignes, 'total' => $nombre] + $totaux));
+        });
+    }
+
+    /* ═══════════════════════════════════════════
      *  ACHAT
      * ═══════════════════════════════════════════ */
-    public function indexAchat(Request $request)
+    /** Achats répondant aux filtres et à la recherche de la requête HTTP : la base commune de la liste, des totaux et de l'export. */
+    private function requeteAchats(Request $request): Builder
     {
         $query = DB::table('achat as a')
             ->leftJoin('users as u', 'a.matricule_s', '=', 'u.id')
@@ -108,10 +210,24 @@ class LogistiqueController extends BaseApiController
                     'a.date_validation', 'a.date_paiement', 'a.ancien_systeme', 'a.matricule_s as _auteur');
         }
 
+        // FIX : l'écran envoie aussi « mois » et « annee » pour les achats, mais
+        // ils n'étaient pas lus ici : ces deux filtres restaient sans effet.
+        if ($request->filled('mois'))       $query->whereMonth('a.date_achat', (int) $request->mois);
+        if ($request->filled('annee'))      $query->whereYear('a.date_achat', (int) $request->annee);
         if ($request->filled('date_debut')) $query->whereDate('a.date_achat', '>=', $request->date_debut);
         if ($request->filled('date_fin'))   $query->whereDate('a.date_achat', '<=', $request->date_fin);
 
-        return $this->avecEstAuteur($this->paginate($query, $request, ['a.nom_materiel'], 'a.id_achat'));
+        return $this->rechercher($query, $request, ['a.nom_materiel']);
+    }
+
+    public function indexAchat(Request $request)
+    {
+        return $this->liste($request, $this->requeteAchats($request), 'a', 'a.id_achat');
+    }
+
+    public function exportAchats(Request $request)
+    {
+        return $this->exporter($this->requeteAchats($request), 'a', 'a.id_achat');
     }
 
     public function storeAchat(Request $request)
@@ -199,7 +315,8 @@ class LogistiqueController extends BaseApiController
     /* ═══════════════════════════════════════════
      *  CHARGE
      * ═══════════════════════════════════════════ */
-    public function indexCharge(Request $request)
+    /** Charges répondant aux filtres et à la recherche de la requête HTTP : la base commune de la liste, des totaux et de l'export. */
+    private function requeteCharges(Request $request): Builder
     {
         $query = DB::table('charge as c')
             ->leftJoin('users as u', 'c.matricule_s', '=', 'u.id')
@@ -225,7 +342,17 @@ class LogistiqueController extends BaseApiController
         if ($request->filled('date_debut')) $query->whereDate('c.date', '>=', $request->date_debut);
         if ($request->filled('date_fin'))   $query->whereDate('c.date', '<=', $request->date_fin);
 
-        return $this->avecEstAuteur($this->paginate($query, $request, ['c.designation'], 'c.id_charge'));
+        return $this->rechercher($query, $request, ['c.designation']);
+    }
+
+    public function indexCharge(Request $request)
+    {
+        return $this->liste($request, $this->requeteCharges($request), 'c', 'c.id_charge');
+    }
+
+    public function exportCharges(Request $request)
+    {
+        return $this->exporter($this->requeteCharges($request), 'c', 'c.id_charge');
     }
 
     public function storeCharge(Request $request)

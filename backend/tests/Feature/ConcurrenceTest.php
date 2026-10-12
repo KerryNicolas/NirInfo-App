@@ -360,4 +360,43 @@ class ConcurrenceTest extends TestCase
         $this->assertSame('validee', DB::table('achat')->where('id_achat', $achat)->value('statut'));
         $this->conclure();
     }
+
+    /* ── export : une seule image de la base ── */
+
+    public function test_un_export_garde_la_meme_image_malgre_une_insertion_validee_pendant_sa_lecture(): void
+    {
+        $this->achatValide('export 1', 800);
+        $this->achatValide('export 2', 700);
+        $marques = fn () => DB::table('achat')->where('nom_materiel', 'like', self::MARQUE . ' %')->count();
+
+        // « export-temoin » : les mêmes lectures sans transaction. Elles DOIVENT se contredire, sinon le
+        // scénario ne prouverait rien. « export » : le vrai export de l'application, avec sa transaction.
+        foreach (['export-temoin', 'export'] as $action) {
+            $avant  = $marques();
+            $lu     = $this->signal("lu-{$action}");
+            $insere = $this->signal("insere-{$action}");
+            $p = $this->lancer(['action' => $action, 'recherche' => self::MARQUE, 'emettre' => $lu, 'attendre' => $insere]);
+
+            // Le processus a fait sa première lecture et attend : on insère et on VALIDE une dépense
+            // (ce test n'a pas de transaction englobante : l'insertion est immédiatement visible des autres).
+            for ($fin = microtime(true) + 20; !file_exists($lu) && microtime(true) < $fin;) { usleep(2000); }
+            $this->assertFileExists($lu, "{$action} : le processus n'a pas commencé sa lecture.");
+            $this->achatValide("export pendant {$action}", 500);
+            touch($insere);
+
+            $r = $this->resultat($p);
+            $this->assertTrue($r['ok'], json_encode($r, JSON_UNESCAPED_UNICODE));
+            $this->assertSame($avant + 1, $r['apres'], "{$action} : l'insertion a bien été validée pendant la lecture.");
+            $this->assertSame($avant, $r['annonce'], "{$action} : le nombre de lignes a été lu avant l'insertion.");
+
+            if ($action === 'export-temoin') {
+                $this->assertSame($avant + 1, $r['recues'], 'Sans transaction, les lectures se contredisent : le scénario est probant.');
+            } else {
+                $this->assertSame($avant, $r['recues'], "L'export ne voit pas la dépense insérée pendant sa lecture.");
+                $this->assertSame($r['total_montant'], $r['somme'], "Le total de l'export est celui de ses lignes.");
+            }
+        }
+
+        $this->conclure();
+    }
 }
