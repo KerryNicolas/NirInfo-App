@@ -3,25 +3,46 @@ import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import SentinelleSession from './components/SentinelleSession'
 import LoginPage          from './pages/LoginPage'
-import CreateUserPage     from './pages/CreateUserPage'
+import DashboardMenu      from './pages/DashboardMenu'
+import { ComponentType, ReactNode, Suspense, lazy } from 'react'
+
+// PERFORMANCE : chaque page est un fichier séparé, téléchargé à la première
+// visite seulement. La connexion et le menu principal restent dans le fichier
+// de départ : ce sont les deux premiers écrans affichés.
+//
+// Après une mise en ligne, un onglet resté ouvert demande des fichiers de
+// l'ancienne version, qui n'existent plus : la page est alors rechargée une
+// fois (une seule, pour ne pas boucler si la panne est ailleurs).
+const RECHARGE_KEY = 'nirinfo_page_rechargee'
+function page(charger: () => Promise<{ default: ComponentType }>) {
+  return lazy(() => charger().then(
+    m => { sessionStorage.removeItem(RECHARGE_KEY); return m },
+    err => {
+      if (sessionStorage.getItem(RECHARGE_KEY)) throw err
+      sessionStorage.setItem(RECHARGE_KEY, '1')
+      window.location.reload()
+      return new Promise<never>(() => {})
+    }
+  ))
+}
+
+const CreateUserPage     = page(() => import('./pages/CreateUserPage'))
 // FIX : ForgotPasswordPage désactivée jusqu'à nouvel ordre (cohérent avec le
 // lien caché dans LoginPage.tsx) — décommenter l'import et la route plus bas
 // pour réactiver.
-// import ForgotPasswordPage from './pages/ForgotPasswordPage'
-import ResetPasswordPage  from './pages/ResetPasswordPage'
-import DashboardMenu      from './pages/DashboardMenu'
-import FormationPage      from './pages/formation/FormationPage'
-import EtudiantPage       from './pages/formation/etudiant/EtudiantPage'
-import LogistiquePage     from './pages/logistique/LogistiquePage'
-import PersonnelPage      from './pages/personnel/PersonnelPage'
-import EtatPage           from './pages/formation/EtatPage'
-import EcheancePage       from './pages/formation/EcheancePage'
-import CertificationPage  from './pages/formation/certification/CertificationPage'
-import ProfilePage        from './pages/ProfilePage'
-import ServicesPage       from './pages/services/ServicesPage'
-import BudgetsPage        from './pages/budgets/BudgetsPage'
-import { ReactNode } from 'react'
-import FacturePage from './pages/formation/FacturePage'
+// const ForgotPasswordPage = page(() => import('./pages/ForgotPasswordPage'))
+const ResetPasswordPage  = page(() => import('./pages/ResetPasswordPage'))
+const FormationPage      = page(() => import('./pages/formation/FormationPage'))
+const EtudiantPage       = page(() => import('./pages/formation/etudiant/EtudiantPage'))
+const LogistiquePage     = page(() => import('./pages/logistique/LogistiquePage'))
+const PersonnelPage      = page(() => import('./pages/personnel/PersonnelPage'))
+const EtatPage           = page(() => import('./pages/formation/EtatPage'))
+const EcheancePage       = page(() => import('./pages/formation/EcheancePage'))
+const CertificationPage  = page(() => import('./pages/formation/certification/CertificationPage'))
+const ProfilePage        = page(() => import('./pages/ProfilePage'))
+const ServicesPage       = page(() => import('./pages/services/ServicesPage'))
+const BudgetsPage        = page(() => import('./pages/budgets/BudgetsPage'))
+const FacturePage        = page(() => import('./pages/formation/FacturePage'))
 
 // FIX : "token" n'existe plus dans AuthContext depuis le passage à l'auth par
 // cookie de session — c'est la présence de "user" qui indique une session active.
@@ -67,6 +88,8 @@ function AdminRoute({ children }: { children: ReactNode }) {
 
 function AppRoutes() {
   return (
+    // Même indicateur que PublicRoute, le temps de télécharger la page demandée.
+    <Suspense fallback={<div className="loading-center"><div className="spinner"/></div>}>
     <Routes>
       {/* ── Pages publiques ── */}
       <Route path="/"                element={<PublicRoute><LoginPage /></PublicRoute>} />
@@ -100,6 +123,7 @@ function AppRoutes() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   )
 }
 

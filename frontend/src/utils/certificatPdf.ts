@@ -1,7 +1,10 @@
-import { jsPDF } from 'jspdf'
+import type { jsPDF } from 'jspdf'
 import AttestationUrl from '../assets/attestation.png'
-import TamponUrl from '../assets/tampon.png'
-import SignatureUrl from '../assets/signature.png'
+// Tampon et signature : copies réduites (500 px de large), suffisantes pour
+// l'aperçu et pour le PDF, qui les ramène de toute façon à 500 et 250 px.
+// Les originaux (tampon.png, signature.png) restent dans assets/.
+import TamponUrl from '../assets/tampon-web.png'
+import SignatureUrl from '../assets/signature-web.png'
 
 // Génération d'un vrai PDF avec jsPDF (et non window.print() + @page CSS) :
 // le PDF a ses propres dimensions et n'est pas concerné par le CSS
@@ -107,6 +110,9 @@ export const NOM_DIRECTEUR = 'MIHARISOA Maminirina'
 export const HALO_RGB: [number, number, number] = [248, 247, 238]
 
 export async function generateCertificatPdf(certif: CertificatPdfData): Promise<jsPDF> {
+  // jsPDF n'est téléchargé qu'ici, à la première génération d'un certificat :
+  // il ne pèse plus sur le chargement des autres pages.
+  const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: PAGE_FORMAT })
   const PAGE_W = doc.internal.pageSize.getWidth()
   const PAGE_H = doc.internal.pageSize.getHeight()
