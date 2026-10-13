@@ -14,7 +14,8 @@ use Illuminate\Queue\SerializesModels;
  * Contient le lien d'activation à usage unique (aucun mot de passe).
  *
  * Emplacement : app/Mail/AccountActivationMail.php
- * Vue associée : resources/views/emails/account-activation.blade.php
+ * Vues associées : resources/views/emails/account-activation.blade.php (HTML)
+ *                  resources/views/emails/account-activation-text.blade.php (texte)
  */
 class AccountActivationMail extends Mailable
 {
@@ -38,6 +39,8 @@ class AccountActivationMail extends Mailable
     {
         return new Content(
             view: 'emails.account-activation',
+            // Version texte : un email en HTML seul est plus souvent classé en indésirable.
+            text: 'emails.account-activation-text',
         );
     }
 }
