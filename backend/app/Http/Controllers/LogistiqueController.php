@@ -609,8 +609,11 @@ class LogistiqueController extends BaseApiController
      * ═══════════════════════════════════════════ */
     public function indexAutre(Request $request)
     {
-        $query = DB::table('autre_depense')->orderBy('id', 'desc');
-        return $this->paginate($query, $request, ['designation'], 'id');
+        // FIX : la clé de cette table est id_autre, pas id — la liste répondait
+        // en erreur 500 (« Champ 'id' inconnu »). Le tri (plus récent d'abord)
+        // est posé par paginate().
+        $query = DB::table('autre_depense');
+        return $this->paginate($query, $request, ['designation'], 'id_autre');
     }
 
     public function storeAutre(Request $request)

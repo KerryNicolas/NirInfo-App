@@ -86,8 +86,8 @@ export function isValidRefFacture(value: string): boolean {
   return REF_FACTURE_RE.test((value || '').trim())
 }
 
-/* ── Âge 18+ à la date du jour (champ optionnel : vide = pas de blocage) ── */
-export function isAdult18(dateNaissance: string): boolean {
+/* ── Âge minimum à la date du jour (champ optionnel : vide = pas de blocage) ── */
+export function hasMinAge(dateNaissance: string, ageMin: number): boolean {
   if (!dateNaissance) return true
   const dn = new Date(dateNaissance)
   if (isNaN(dn.getTime())) return false
@@ -95,8 +95,16 @@ export function isAdult18(dateNaissance: string): boolean {
   let age = today.getFullYear() - dn.getFullYear()
   const m = today.getMonth() - dn.getMonth()
   if (m < 0 || (m === 0 && today.getDate() < dn.getDate())) age--
-  return age >= 18
+  return age >= ageMin
 }
+
+/* ── Âge 18+ (personnel) ── */
+export function isAdult18(dateNaissance: string): boolean {
+  return hasMinAge(dateNaissance, 18)
+}
+
+/* ── Âge minimum d'un étudiant ── */
+export const AGE_MIN_ETUDIANT = 15
 
 /* ── Nom : toujours en MAJUSCULES ── */
 export function toUpperName(value: string): string {

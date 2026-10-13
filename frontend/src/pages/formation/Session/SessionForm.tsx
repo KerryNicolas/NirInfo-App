@@ -6,19 +6,42 @@ import { useTable } from '../../../hooks/useTable'
 import { useModuleSuggestions } from '../../../hooks/useModuleSuggestions'
 import Pagination from '../../../components/Pagination'
 import ConfirmDialog from '../../../components/ConfirmDialog'
+import FicheDetail from '../../../components/FicheDetail'
 import { useAuth } from '../../../contexts/AuthContext'
 import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../../components/icons'
 import { formatMontantInput, parseMontantInput } from '../../../utils/validators'
 
 interface Session {
   code_session: string; date_debut: string; date_fin: string
-  date_echeance: string; horaire_description: string
+  date_echeance: string; horaire_description: string; horaire_designation: string
   frais_formation: number; module_nom: string; code_module: string; code_horaire: string
   editeur: string; formateur_nom: string; lieu: string
+  id_formateur: number | null
 }
 interface Horaire { code_horaire: string; designation: string; horaire: string }
+interface Formateur { id: number; matricule: string; nom: string; prenom: string }
 
-const EMPTY = { date_debut:'', date_fin:'', date_echeance:'', code_horaire:'', code_module:'', frais_formation:'', lieu:'Ampandrana', id_formateur:'' }
+const EMPTY = { date_debut:'', date_fin:'', date_echeance:'', code_horaire:'', code_module:'', frais_formation:'', lieu:'Ampandrana' }
+
+// Libellé d'un formateur dans le champ et dans les suggestions :
+// « NOM Prénom (matricule) ».
+const libelleFormateur = (f: Formateur) => {
+  const nom = `${f.nom} ${f.prenom}`.trim()
+  return f.matricule ? `${nom} (${f.matricule})` : nom
+}
+const sansCasse = (v: string) => v.trim().toLowerCase().replace(/\s+/g, ' ')
+
+// Formateur désigné par le texte saisi : une suggestion choisie, le
+// matricule seul, ou un nom ou un bout de matricule qui ne correspond qu'à
+// un seul formateur. Sinon undefined.
+function trouverFormateur(saisie: string, formateurs: Formateur[]): Formateur | undefined {
+  const q = sansCasse(saisie)
+  if (!q) return undefined
+  const exact = formateurs.find(f => sansCasse(libelleFormateur(f)) === q || sansCasse(f.matricule) === q)
+  if (exact) return exact
+  const proches = formateurs.filter(f => sansCasse(libelleFormateur(f)).includes(q))
+  return proches.length === 1 ? proches[0] : undefined
+}
 
 const DEFAULT_HORAIRES: Horaire[] = [
   { code_horaire:'MAT', designation:'Matin',          horaire:'Lundi–Vendredi  07h30–12h00' },
@@ -35,6 +58,7 @@ export default function SessionForm() {
   const [horaires, setHoraires] = useState<Horaire[]>([])
   const [form,     setForm]     = useState(EMPTY)
   const [editing,  setEditing]  = useState<Session | null>(null)
+  const [viewing,  setViewing]  = useState<Session | null>(null)
   const [saving,   setSaving]   = useState(false)
   const [confirmDeleteCode, setConfirmDeleteCode] = useState<string | null>(null)
 
@@ -42,6 +66,16 @@ export default function SessionForm() {
   // chargeait que 15 modules sur 65 (pas de per_page envoyé côté fetch initial).
   const [moduleQuery, setModuleQuery] = useState('')
   const moduleSuggestions = useModuleSuggestions(moduleQuery)
+
+  // Formateur en autocomplétion (nom ou matricule). Peu nombreux : chargés une fois.
+  const [formateurs,     setFormateurs]     = useState<Formateur[]>([])
+  const [formateurQuery, setFormateurQuery] = useState('')
+
+  useEffect(() => {
+    api.get('/formateurs')
+      .then(r => setFormateurs(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     // Horaires : peu nombreux (6 par défaut + quelques personnalisés),
@@ -54,7 +88,13 @@ export default function SessionForm() {
   const allHoraires = [...horaires, ...DEFAULT_HORAIRES.filter(d => !horaires.find(h => h.code_horaire === d.code_horaire))]
   const selectedHoraire = allHoraires.find(h => h.code_horaire === form.code_horaire)
 
-  const reset = () => { setForm(EMPTY); setModuleQuery(''); setEditing(null) }
+  const reset = () => { setForm(EMPTY); setModuleQuery(''); setFormateurQuery(''); setEditing(null) }
+
+  // Texte du champ Formateur pour une session existante.
+  const formateurDe = (s: Session) => {
+    const f = formateurs.find(x => x.id === Number(s.id_formateur))
+    return f ? libelleFormateur(f) : ''
+  }
 
   const handleEdit = (s: Session) => {
     setEditing(s)
@@ -66,9 +106,9 @@ export default function SessionForm() {
       code_module:     s.code_module     || '',
       frais_formation: formatMontantInput(String(s.frais_formation)) || '',
       lieu:            s.lieu            || 'Ampandrana',
-      id_formateur:    '',
     })
     setModuleQuery(s.module_nom || '')
+    setFormateurQuery(formateurDe(s))
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -76,7 +116,12 @@ export default function SessionForm() {
     setForm(p => ({ ...p, [k]: e.target.value }))
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true)
+    e.preventDefault()
+    // Formateur facultatif, mais un texte saisi doit désigner un formateur.
+    const formateur = trouverFormateur(formateurQuery, formateurs)
+    if (formateurQuery.trim() && !formateur) { toast.error('Formateur introuvable : choisissez-le dans la liste'); return }
+    const id_formateur = formateur ? formateur.id : null
+    setSaving(true)
     try {
       if (editing) {
         // FIX : code_horaire, code_module et lieu sont maintenant envoyés en
@@ -85,11 +130,14 @@ export default function SessionForm() {
           date_debut: form.date_debut, date_fin: form.date_fin, date_echeance: form.date_echeance,
           frais_formation: parseMontantInput(form.frais_formation), code_horaire: form.code_horaire,
           code_module: form.code_module, lieu: form.lieu,
+          // Envoyé seulement si le champ a changé : sinon le formateur
+          // déjà enregistré n'est pas touché.
+          ...(formateurQuery.trim() !== formateurDe(editing) ? { id_formateur } : {}),
         })
         toast.success('Session mise à jour'); reset()
       } else {
-        await api.post('/sessions', { ...form, frais_formation: parseMontantInput(form.frais_formation), id_formateur: form.id_formateur || undefined })
-        toast.success('Session créée avec succès'); setForm(EMPTY); setModuleQuery('')
+        await api.post('/sessions', { ...form, frais_formation: parseMontantInput(form.frais_formation), id_formateur })
+        toast.success('Session créée avec succès'); setForm(EMPTY); setModuleQuery(''); setFormateurQuery('')
       }
       table.reload()
     } catch (err: any) { toast.error(err.response?.data?.message || "Erreur lors de l'enregistrement") }
@@ -198,10 +246,24 @@ export default function SessionForm() {
                 <LieuSelect value={form.lieu} onChange={set('lieu')} />
               </div>
               <div className="form-group">
-                <label className="form-label">ID Formateur</label>
-                {/* FIX : déverrouillé même en édition — même traitement que
-                    les autres champs (lieu, code_horaire, code_module...). */}
-                <input className="form-control" type="number" value={form.id_formateur} onChange={set('id_formateur')} placeholder="Ex: 4" />
+                <label className="form-label">Formateur</label>
+                {/* Autocomplétion par nom ou par matricule ; modifiable aussi en
+                    édition, comme les autres champs. */}
+                <input
+                  className="form-control"
+                  list="formateur-suggestions"
+                  value={formateurQuery}
+                  onChange={e => setFormateurQuery(e.target.value)}
+                  onBlur={() => {
+                    const f = trouverFormateur(formateurQuery, formateurs)
+                    if (f) setFormateurQuery(libelleFormateur(f))
+                  }}
+                  placeholder="Tapez le nom ou le matricule du formateur…" />
+                <datalist id="formateur-suggestions">
+                  {formateurs.map(f => (
+                    <option key={f.id} value={libelleFormateur(f)} />
+                  ))}
+                </datalist>
               </div>
             </div>
             <button type="submit" className="btn btn-primary" style={{ display:'flex', alignItems:'center', gap:6 }} disabled={saving}>
@@ -232,7 +294,7 @@ export default function SessionForm() {
                 {table.data.length === 0 ? (
                   <tr><td colSpan={10}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucune session trouvée'}</div></td></tr>
                 ) : table.data.map((s, idx) => (
-                  <tr key={s.code_session}>
+                  <tr key={s.code_session} onClick={() => setViewing(s)} style={{ cursor:'pointer' }}>
                     <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
                     <td style={{ fontWeight:500, fontSize:12 }}>{s.code_session}</td>
                     <td style={{ fontSize:13 }}>{s.date_debut}</td>
@@ -242,7 +304,7 @@ export default function SessionForm() {
                     <td style={{ fontWeight:600, color:'#16a34a', whiteSpace:'nowrap' }}>{fmt(s.frais_formation)} Ar</td>
                     <td><span className="badge badge-info">{s.module_nom}</span></td>
                     <td style={{ fontSize:13 }}>{s.lieu ? <span style={{ textTransform:'capitalize' }}>{s.lieu}</span> : <span style={{ color:'#cbd5e1' }}>—</span>}</td>
-                    <td><div className="table-actions">
+                    <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(s)}><IcoEdit /></button>
                       {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(s.code_session)}><IcoTrash /></button>}
                     </div></td>
@@ -254,6 +316,25 @@ export default function SessionForm() {
         </div>
         {!table.loading && table.meta.total > 0 && <Pagination meta={table.meta} onPage={table.setPage} onPerPage={table.setPerPage} />}
       </div>
+
+      {viewing && (
+        <FicheDetail
+          title="Fiche session"
+          onClose={() => setViewing(null)}
+          rows={[
+            ['Code', viewing.code_session],
+            ['Module', viewing.module_nom ? `${viewing.module_nom} (${viewing.code_module})` : viewing.code_module || '—'],
+            ['Date de début', viewing.date_debut || '—'],
+            ['Date de fin', viewing.date_fin || '—'],
+            ["Date d'échéance", viewing.date_echeance || '—'],
+            ['Horaire', [viewing.horaire_designation, viewing.horaire_description].filter(Boolean).join(' — ') || viewing.code_horaire || '—'],
+            ['Frais de formation', `${fmt(viewing.frais_formation)} Ar`],
+            ['Lieu', viewing.lieu || '—'],
+            ['Formateur', formateurDe(viewing) || viewing.formateur_nom?.trim() || '—'],
+            ['Éditeur', viewing.editeur?.trim() || '—'],
+          ]}
+        />
+      )}
 
       <ConfirmDialog
         open={!!confirmDeleteCode}

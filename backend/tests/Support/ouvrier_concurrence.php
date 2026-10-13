@@ -11,6 +11,7 @@
 //   action   : payer | annuler-paiement | virement | retrait | supprimer-virement
 //              | supprimer-gestion | croises | ecrivain | lecteur
 //              | export | export-temoin
+//              | matricule-creer | matricule-imbrique | matricule-temoin
 //   attendre : fichier dont on attend l'apparition avant de commencer
 //   emettre  : fichier créé une fois l'opération faite (transaction encore ouverte)
 //   maintien : durée, en ms, pendant laquelle la transaction reste ouverte
@@ -21,6 +22,7 @@ use App\Http\Controllers\GererController;
 use App\Http\Controllers\LogistiqueController;
 use App\Services\DepenseService;
 use App\Services\IndicateursTresorerieService;
+use App\Services\MatriculeEtudiantService;
 use App\Services\TresorerieService;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Http\Request;
@@ -140,6 +142,145 @@ if ($action === 'export' || $action === 'export-temoin') {
         // Lu APRÈS l'export : la dépense insérée pendant la lecture est bien dans la base.
         'apres' => DB::table('achat')->where('nom_materiel', 'like', '%' . $a['recherche'] . '%')->count(),
     ]);
+}
+
+/* ── matricules : attribution sous verrou, depuis une transaction de l'appelant ──
+ *
+ *   matricule-creer    : type = etudiant | certificat. Ouvre une transaction,
+ *                        demande un matricule au service et écrit la ligne ;
+ *                        options : pret (fichier créé quand le processus est
+ *                        prêt), annuler (annule au lieu de valider),
+ *                        attente_verrou (secondes).
+ *   matricule-imbrique : écrit d'abord une ligne témoin dans SA transaction,
+ *                        puis demande un matricule ; rapporte l'état réel de
+ *                        la transaction après l'échec, et la valide.
+ *   matricule-temoin   : l'ANCIEN mécanisme (lire le plus grand numéro, ajouter
+ *                        un, écrire — sous un verrou nommé relâché AVANT la
+ *                        validation). Il doit produire un doublon, sinon le
+ *                        scénario ne prouverait rien. Il travaille sur une
+ *                        série à part (« serie », ex. TEMOIN-65F0A1-), jamais
+ *                        sur la série NI ni sur des données existantes.
+ *
+ *   journal (obligatoire) : fichier où CHAQUE ligne écrite est notée, par sa
+ *   clé primaire, juste après l'écriture et AVANT la validation. Une ligne
+ *   validée est donc toujours au journal ; si le processus meurt avant de
+ *   l'avoir notée, sa transaction n'a pas été validée et la ligne n'existe
+ *   pas. Le test ne supprime que ce que le journal désigne. */
+
+if (str_starts_with($action, 'matricule-')) {
+    $marque = 'TEST-CONC';
+    if (empty($a['journal'])) {
+        $repondre(['ok' => false, 'statut' => 0, 'message' => 'REFUS : journal des lignes écrites absent']);
+    }
+    $noter = function (string $table, string|int $cle) use ($a): void {
+        file_put_contents($a['journal'], json_encode(['table' => $table, 'cle' => $cle]) . PHP_EOL, FILE_APPEND | LOCK_EX);
+    };
+
+    $service = app(MatriculeEtudiantService::class);
+    if (isset($a['attente_verrou'])) { $service->attenteVerrou = (int) $a['attente_verrou']; }
+    $connexion = (int) DB::selectOne('SELECT CONNECTION_ID() AS id')->id;
+
+    /** Écrit un certificat de test et renvoie [clé primaire, référence]. */
+    $certificat = function (?string $matricule, string $genre) use ($marque, $noter): array {
+        $reference = "{$marque}-{$genre}-" . str_replace('.', '', uniqid('', true));
+        $id = (int) DB::table('certificat')->insertGetId([
+            'reference' => $reference, 'matricule' => $matricule,
+            'debut_session' => '2099-03-01', 'fin_session' => '2099-03-31', 'accept' => 0,
+            'origine' => 'manuel', 'nom_manuel' => $marque,
+        ]);
+        $noter('certificat', $id);
+
+        return [$id, $reference];
+    };
+    /** Écrit la ligne demandée et renvoie sa clé primaire. */
+    $ecrire = function (string $type, string $matricule) use ($marque, $noter, $certificat): string|int {
+        if ($type === 'certificat') {
+            return $certificat($matricule, 'CERT')[0];
+        }
+        DB::table('etudiant')->insert([
+            'matricule_etudiant' => $matricule, 'nom_etudiant' => $marque, 'prenom_etudiant' => 'Matricule',
+            'sexe' => 'HOMME', 'matricule_s' => $marque,
+        ]);
+        $noter('etudiant', $matricule);
+
+        return $matricule;
+    };
+
+    if (!empty($a['pret'])) { touch($a['pret']); }
+    $attendre($a['attendre'] ?? null);
+    $t0 = microtime(true);
+    DB::beginTransaction();
+
+    try {
+        if ($action === 'matricule-creer') {
+            $cle = null;
+            $matricule = $service->attribuer(function (string $m) use ($ecrire, $a, &$cle) { $cle = $ecrire($a['type'], $m); });
+            $attente = $ms($t0);
+            if (!empty($a['emettre'])) { touch($a['emettre']); }
+            usleep(((int) ($a['maintien'] ?? 0)) * 1000);
+            empty($a['annuler']) ? DB::commit() : DB::rollBack();
+            $repondre(['ok' => true, 'statut' => 200, 'message' => empty($a['annuler']) ? 'accepté' : 'annulé', 'attente_ms' => $attente, 'matricule' => $matricule, 'type' => $a['type'], 'cle' => $cle, 'connexion' => $connexion]);
+        }
+
+        if ($action === 'matricule-imbrique') {
+            // Ce que l'appelant écrit dans SA transaction, avant de demander un matricule.
+            [$id, $reference] = $certificat(null, 'IMB');
+
+            $statut = 200; $message = 'accepté';
+            try {
+                $service->attribuer(fn (string $m) => $ecrire('etudiant', $m));
+            } catch (HttpExceptionInterface $e) {
+                [$statut, $message] = [$e->getStatusCode(), $e->getMessage()];
+            }
+            $attente = $ms($t0);
+
+            // État après le refus : niveau compté par Laravel, et ce que la
+            // transaction voit encore de sa propre écriture. La preuve finale
+            // est faite par le test, de l'extérieur, après la validation.
+            $niveau  = DB::transactionLevel();
+            $ouverte = DB::getPdo()->inTransaction();
+            $visible = DB::table('certificat')->where('id', $id)->exists();
+            DB::commit();
+
+            $repondre(['ok' => $statut === 200, 'statut' => $statut, 'message' => $message, 'attente_ms' => $attente, 'niveau' => $niveau, 'transaction_ouverte' => $ouverte, 'temoin_visible' => $visible, 'id' => $id, 'reference' => $reference, 'connexion' => $connexion]);
+        }
+
+        if ($action === 'matricule-temoin') {
+            $serie = (string) ($a['serie'] ?? '');
+            if (!preg_match('/^TEMOIN-[A-Z0-9]+-$/', $serie)) {
+                throw new InvalidArgumentException('série de test invalide');
+            }
+
+            DB::selectOne('SELECT GET_LOCK(?, 10) AS ok', ['test_conc_matricule_temoin']);
+            try {
+                // Comme l'ancien service : « le plus grand numéro + 1 », lu
+                // sans voir ce qu'une autre transaction n'a pas encore validé.
+                $dernier = (int) DB::table('certificat')->where('matricule', 'like', $serie . '%')
+                    ->max(DB::raw('CAST(SUBSTRING(matricule, ' . (strlen($serie) + 1) . ') AS UNSIGNED)'));
+                $matricule = $serie . str_pad((string) ($dernier + 1), 4, '0', STR_PAD_LEFT);
+                [$id, $reference] = $certificat($matricule, 'TEMOIN');
+            } finally {
+                DB::selectOne('SELECT RELEASE_LOCK(?) AS ok', ['test_conc_matricule_temoin']);
+            }
+            $attente = $ms($t0);
+            if (!empty($a['emettre'])) { touch($a['emettre']); }
+            usleep(((int) ($a['maintien'] ?? 0)) * 1000);
+            DB::commit();
+            $repondre(['ok' => true, 'statut' => 200, 'message' => 'accepté', 'attente_ms' => $attente, 'matricule' => $matricule, 'id' => $id, 'reference' => $reference, 'connexion' => $connexion]);
+        }
+
+        throw new InvalidArgumentException("action inconnue : {$action}");
+    } catch (HttpExceptionInterface $e) {
+        $attente = $ms($t0);
+        // État au moment où le refus remonte, avant d'annuler.
+        $etat = ['niveau' => DB::transactionLevel(), 'transaction_ouverte' => DB::getPdo()->inTransaction()];
+        DB::rollBack();
+        $repondre(['ok' => false, 'statut' => $e->getStatusCode(), 'message' => $e->getMessage(), 'attente_ms' => $attente, 'connexion' => $connexion] + $etat);
+    } catch (Throwable $e) {
+        $attente = $ms($t0);
+        DB::rollBack();
+        $repondre(['ok' => false, 'statut' => 500, 'message' => 'ERREUR ' . substr($e->getMessage(), 0, 160), 'attente_ms' => $attente, 'connexion' => $connexion]);
+    }
 }
 
 /* ── opérations uniques, dans une transaction qui peut être gardée ouverte ── */

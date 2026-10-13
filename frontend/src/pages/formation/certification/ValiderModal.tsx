@@ -2,7 +2,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { formatMontantInput, parseMontantInput } from '../../../utils/validators'
 import { IcoClose } from '../../../components/icons'
-import { prixToInput, isManuel } from './types'
+import { prixToInput, isManuel, suitPrixStandard } from './types'
 import type { Certification, Compte, ValidationPayload } from './types'
 
 // Fenêtre de validation d'un certificat.
@@ -74,6 +74,11 @@ export default function ValiderModal({ certif, comptes, onClose, onConfirm }: {
               <div className="form-group">
                 <label className="form-label">Prix (Ar)</label>
                 <input className="form-control" type="text" inputMode="numeric" value={prix} onChange={e => setPrix(formatMontantInput(e.target.value))} required placeholder="Ex: 10 000" />
+                {suitPrixStandard(certif) && (
+                  <div style={{ fontSize:13, color:'#94a3b8', marginTop:6 }}>
+                    Prix standard en vigueur (onglet « Modifier prix »). Vous pouvez le corriger pour ce certificat.
+                  </div>
+                )}
               </div>
             </>
           )}

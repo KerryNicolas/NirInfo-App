@@ -5,6 +5,8 @@ backend/storage/app/public/photos/*
 backend/storage/framework/cache/
 backend/storage/framework/sessions/
 backend/storage/framework/views/
+# Faux disque créé par les tests (Storage::fake)
+backend/storage/framework/testing/
 backend/storage/logs/
 backend/bootstrap/cache/
 !backend/storage/app/public/photos/.gitkeep
@@ -13,6 +15,9 @@ backend/.phpunit.result.cache
 # Photos du personnel envoyées depuis l'application (pas du code)
 backend/storage/app/public/personnels/
 backend/public/storage/personnels/*
+# Photos de profil des comptes utilisateurs (données personnelles, pas du code)
+backend/storage/app/public/utilisateurs/
+backend/public/storage/utilisateurs/
 
 # Frontend
 frontend/node_modules/

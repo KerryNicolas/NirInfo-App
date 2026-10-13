@@ -12,6 +12,10 @@ export interface Certification {
   date_naissance?: string; lieu_naissance?: string
   origine?: 'normal' | 'manuel'
   motif_gratuit?: string | null
+  // 0 : certificat en attente sans prix particulier — `prix` est alors le
+  // prix standard en vigueur (onglet « Modifier prix »).
+  prix_particulier?: number
+  editeur?: string
 }
 
 // Ce que la fenêtre de validation envoie au serveur : soit un paiement
@@ -21,6 +25,10 @@ export type ValidationPayload =
   | { gratuit: true; motif_gratuit: string }
 export interface Compte { id_compte: number; libelle: string }
 export interface PrixHistorique { id_prix_certificat: number; prix: number; date_modification: string }
+
+// Vrai si le certificat, encore en attente, suit le prix standard.
+export const suitPrixStandard = (c: { prix_particulier?: unknown }) =>
+  c.prix_particulier !== undefined && Number(c.prix_particulier) === 0
 
 export const isManuel = (c: { origine?: string }) => c.origine === 'manuel'
 

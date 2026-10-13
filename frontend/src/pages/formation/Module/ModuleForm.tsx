@@ -1,5 +1,4 @@
 import { IcoPlus, IcoEdit, IcoSave, IcoX } from '../../../components/icons'
-import { toUpperName } from '../../../utils/validators'
 
 interface ModuleFormData {
   code_module: string
@@ -62,14 +61,11 @@ export default function ModuleForm({ form, editing, saving, onChange, onSubmit, 
           </div>
 
           <div className="form-group">
-            {/* FIX : astérisque supprimé — demandé explicitement pour le
-                champ Module (points 1 et 10). Saisie forcée en MAJUSCULES
-                (point 1). Le champ reste obligatoire côté validation
-                (attribut required conservé), seul l'astérisque visuel est
-                retiré. */}
+            {/* Astérisque supprimé (points 1 et 10) ; le champ reste
+                obligatoire (attribut required). La saisie est gardée telle
+                quelle, majuscules et minuscules. */}
             <label className="form-label">Module</label>
-            <input className="form-control" value={form.nom}
-              onChange={e => onChange('nom')({ ...e, target: { ...e.target, value: toUpperName(e.target.value) } } as React.ChangeEvent<HTMLInputElement>)}
+            <input className="form-control" value={form.nom} onChange={onChange('nom')}
               required placeholder="Nom du module" />
           </div>
 

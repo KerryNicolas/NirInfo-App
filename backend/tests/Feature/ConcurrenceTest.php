@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\MatriculeEtudiantService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Process\Process;
 use Tests\Support\VerifieIntegriteFinanciere;
 use Tests\TestCase;
@@ -97,6 +99,54 @@ class ConcurrenceTest extends TestCase
         DB::table('transaction')->whereIn('id_transaction', $journal)->delete();
         DB::table('achat')->whereIn('id_achat', $achats)->delete();
         DB::table('compte')->whereIn('id_compte', $comptes)->delete();
+
+        $this->nettoyerMatricules();
+    }
+
+    /**
+     * Matricules : on ne supprime QUE les lignes que les processus de CE test
+     * ont notées au journal, une par une, par leur clé primaire — et seulement
+     * si elles portent bien la marque de test. Jamais par marque seule, jamais
+     * par matricule, jamais par plage de numéros. Le compteur n'est pas touché.
+     *
+     * Un processus note chaque ligne avant de valider sa transaction : une
+     * ligne validée est toujours au journal. Si une exécution est tuée avant
+     * ce nettoyage, ses lignes restent en base : restes() les signalera, et
+     * elles se retirent à la main, après examen.
+     */
+    private function nettoyerMatricules(): void
+    {
+        foreach ($this->lignesDuJournal() as ['table' => $table, 'cle' => $cle]) {
+            if ($table === 'etudiant') {
+                $this->fichesDeTest()->where('matricule_etudiant', $cle)->delete();
+            } elseif ($table === 'certificat') {
+                $this->certificatsDeTest()->where('id', $cle)->delete();
+            }
+        }
+    }
+
+    /** @return array<int, array{table: string, cle: string|int}> */
+    private function lignesDuJournal(): array
+    {
+        $journal = $this->signal('journal-matricules');
+        if (!file_exists($journal)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            fn (string $ligne) => json_decode($ligne, true),
+            file($journal, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)
+        ), fn ($l) => is_array($l) && isset($l['table'], $l['cle'])));
+    }
+
+    private function fichesDeTest()
+    {
+        return DB::table('etudiant')->where('nom_etudiant', self::MARQUE)->where('matricule_s', self::MARQUE);
+    }
+
+    private function certificatsDeTest()
+    {
+        return DB::table('certificat')->where('origine', 'manuel')->where('nom_manuel', self::MARQUE)->where('reference', 'like', self::MARQUE . '-%');
     }
 
     private function restes(): array
@@ -108,6 +158,8 @@ class ConcurrenceTest extends TestCase
             'virements journalisés' => DB::table('transfer')->whereNotNull('id_transaction_debit')->count(),
             'écritures de virement' => DB::table('transaction')->whereIn('type_operation', ['virement', 'annulation_virement'])->count(),
             'événements' => DB::table('depense_evenements')->count(),
+            'fiches étudiant' => $this->fichesDeTest()->count(),
+            'certificats'     => $this->certificatsDeTest()->count(),
         ];
     }
 
@@ -115,6 +167,11 @@ class ConcurrenceTest extends TestCase
 
     private function lancer(array $ordre): Process
     {
+        // Les processus qui écrivent des matricules notent leurs lignes au journal du test.
+        if (str_starts_with($ordre['action'] ?? '', 'matricule-')) {
+            $ordre += ['journal' => $this->signal('journal-matricules')];
+        }
+
         $p = new Process([PHP_BINARY, base_path('tests/Support/ouvrier_concurrence.php'), json_encode($ordre)], base_path(), [
             'DB_DATABASE' => DB::connection()->getDatabaseName(), 'DEPENSES_WORKFLOW' => 'true', 'APP_ENV' => 'testing', 'MAIL_MAILER' => 'array',
         ]);
@@ -398,5 +455,231 @@ class ConcurrenceTest extends TestCase
         }
 
         $this->conclure();
+    }
+
+    /* ── matricules : un numéro n'est jamais donné deux fois ──
+     *
+     * L'ouvrier demande son matricule DANS une transaction qu'il garde ouverte :
+     * c'est le cas que l'ancien verrou (relâché avant la validation) ne couvrait
+     * pas. Ces tests n'écrivent jamais dans le compteur eux-mêmes et ne le
+     * remettent pas à sa valeur : il avance, c'est tout. */
+
+    private const TENUE = 3000;   // ms pendant lesquelles un processus garde le verrou du compteur, pour les scénarios de délai
+
+    private function compteur(): int
+    {
+        $this->assertTrue(Schema::hasTable(MatriculeEtudiantService::TABLE), 'La table sequence_matricule est absente de la base de test : exécutez la migration 2026_10_15_000002 (avec --path).');
+
+        return app(MatriculeEtudiantService::class)->dernierNumero();
+    }
+
+    /** Matricules réellement présents en base, parmi les lignes de test. */
+    private function matriculesEcrits(): array
+    {
+        $tous = $this->fichesDeTest()->pluck('matricule_etudiant')->merge($this->certificatsDeTest()->whereNotNull('matricule')->pluck('matricule'))->all();
+        sort($tous);
+
+        return $tous;
+    }
+
+    /** Un processus tient le verrou du compteur puis annule ; l'autre arrive pendant ce temps avec un délai d'une seconde. */
+    private function contreUnVerrouTenu(string $action): array
+    {
+        $signal = $this->signal('tenu-' . uniqid());
+        $p1 = $this->lancer(['action' => 'matricule-creer', 'type' => 'etudiant', 'emettre' => $signal, 'maintien' => self::TENUE, 'annuler' => true]);
+        $p2 = $this->lancer(['action' => $action, 'type' => 'etudiant', 'attendre' => $signal, 'attente_verrou' => 1]);
+        $r1 = $this->resultat($p1);
+        $r2 = $this->resultat($p2);
+
+        $this->assertTrue($r1['ok'], json_encode($r1, JSON_UNESCAPED_UNICODE));
+        $this->assertNotSame($r1['connexion'], $r2['connexion'], 'Deux connexions distinctes.');
+        // Arrêté par le délai du verrou, et par rien d'autre : il a attendu au
+        // moins ce délai, et a renoncé avant que le premier ne libère le verrou.
+        $this->assertGreaterThanOrEqual(900, $r2['attente_ms'], json_encode($r2, JSON_UNESCAPED_UNICODE));
+        $this->assertLessThan(self::TENUE - 300, $r2['attente_ms'], json_encode($r2, JSON_UNESCAPED_UNICODE));
+        $this->assertSame(503, $r2['statut'], json_encode($r2, JSON_UNESCAPED_UNICODE));
+        $this->assertSame(MatriculeEtudiantService::MESSAGE_INDISPONIBLE, $r2['message']);
+
+        return $r2;
+    }
+
+    public function test_deux_etudiants_crees_en_meme_temps_recoivent_deux_matricules(): void
+    {
+        $avant = $this->compteur();
+        $ordre = ['action' => 'matricule-creer', 'type' => 'etudiant'];
+
+        [$premier, $second] = $this->duel($ordre, $ordre);
+
+        $this->assertTrue($second['ok'], json_encode($second, JSON_UNESCAPED_UNICODE));
+        $this->assertNotSame($premier['connexion'], $second['connexion'], 'Deux connexions distinctes.');
+        $this->assertNotSame($premier['matricule'], $second['matricule']);
+        $attendus = [$premier['matricule'], $second['matricule']];
+        sort($attendus);
+        $this->assertSame($attendus, $this->matriculesEcrits(), 'Les deux fiches existent, chacune avec son matricule.');
+        $this->assertGreaterThanOrEqual($avant + 2, $this->compteur());
+    }
+
+    public function test_un_etudiant_et_un_certificat_manuel_en_meme_temps_ne_partagent_pas_un_numero(): void
+    {
+        [$premier, $second] = $this->duel(
+            ['action' => 'matricule-creer', 'type' => 'etudiant'],
+            ['action' => 'matricule-creer', 'type' => 'certificat'],
+        );
+
+        $this->assertTrue($second['ok'], json_encode($second, JSON_UNESCAPED_UNICODE));
+        $this->assertNotSame($premier['matricule'], $second['matricule']);
+        $this->assertSame([$premier['matricule']], $this->fichesDeTest()->pluck('matricule_etudiant')->all());
+        $this->assertSame([$second['matricule']], $this->certificatsDeTest()->pluck('matricule')->all());
+    }
+
+    public function test_une_creation_annulee_rend_son_numero_au_suivant_sans_rien_laisser(): void
+    {
+        $avant = $this->compteur();
+
+        [$premier, $second] = $this->duel(
+            ['action' => 'matricule-creer', 'type' => 'etudiant', 'annuler' => true],
+            ['action' => 'matricule-creer', 'type' => 'etudiant'],
+        );
+
+        $this->assertSame('annulé', $premier['message']);
+        $this->assertTrue($second['ok'], json_encode($second, JSON_UNESCAPED_UNICODE));
+        // Le second a attendu la fin du premier (vérifié par duel()), puis a lu
+        // le compteur tel que l'annulation l'a laissé : il reçoit le même numéro.
+        $this->assertSame($premier['matricule'], $second['matricule']);
+        $this->assertSame([$second['matricule']], $this->matriculesEcrits(), 'Une seule fiche : celle du second.');
+        $this->assertSame($avant + 1, $this->compteur(), 'Un seul numéro consommé.');
+    }
+
+    public function test_un_verrou_tenu_trop_longtemps_donne_une_reponse_503_et_ne_cree_rien(): void
+    {
+        $avant = $this->compteur();
+
+        $second = $this->contreUnVerrouTenu('matricule-creer');
+
+        // Le service est revenu au point de sauvegarde : la transaction de
+        // l'appelant existe toujours, et Laravel en compte bien une seule.
+        $this->assertTrue($second['transaction_ouverte']);
+        $this->assertSame(1, $second['niveau']);
+        $this->assertSame([], $this->matriculesEcrits());
+        $this->assertSame($avant, $this->compteur(), 'Le premier a annulé, le second a été refusé : aucun numéro consommé.');
+    }
+
+    public function test_apres_un_delai_de_verrou_la_transaction_de_l_appelant_est_reellement_intacte(): void
+    {
+        $avant = $this->compteur();
+
+        $second = $this->contreUnVerrouTenu('matricule-imbrique');
+
+        // État rapporté par le processus juste après le refus…
+        $this->assertTrue($second['transaction_ouverte'], 'MySQL : la transaction englobante est toujours ouverte.');
+        $this->assertSame(1, $second['niveau'], 'Laravel : un seul niveau de transaction, celui de l\'appelant.');
+        $this->assertTrue($second['temoin_visible']);
+        // … et prouvé de l'extérieur : ce que l'appelant avait écrit AVANT de
+        // demander le matricule a bien été validé par SA validation, et rien
+        // de l'attribution refusée n'a été gardé.
+        $temoin = DB::table('certificat')->where('id', $second['id'])->first();
+        $this->assertNotNull($temoin, 'La ligne témoin de l\'appelant est validée.');
+        $this->assertSame($second['reference'], $temoin->reference);
+        $this->assertNull($temoin->matricule);
+        $this->assertSame(0, $this->fichesDeTest()->count(), 'Aucune fiche créée par l\'attribution refusée.');
+        $this->assertSame($avant, $this->compteur());
+    }
+
+    public function test_dix_creations_simultanees_recoivent_dix_matricules_distincts(): void
+    {
+        $avant  = $this->compteur();
+        $depart = $this->signal('depart-' . uniqid());
+        $tenue  = 100;   // ms pendant lesquelles chacun garde sa transaction ouverte
+
+        $processus = [];
+        $prets = [];
+        for ($i = 0; $i < 10; $i++) {
+            $prets[$i] = $this->signal("pret-{$i}-" . uniqid());
+            $processus[$i] = $this->lancer(['action' => 'matricule-creer', 'type' => $i % 2 ? 'certificat' : 'etudiant', 'pret' => $prets[$i], 'attendre' => $depart, 'maintien' => $tenue]);
+        }
+
+        // Les dix processus sont démarrés et attendent le signal : ils partent ensemble.
+        for ($fin = microtime(true) + 60; count(array_filter($prets, 'file_exists')) < 10 && microtime(true) < $fin;) { usleep(5000); }
+        $this->assertCount(10, array_filter($prets, 'file_exists'), 'Les dix processus doivent être prêts avant le départ.');
+        $t0 = microtime(true);
+        touch($depart);
+
+        $resultats = array_map(fn (Process $p) => $this->resultat($p), $processus);
+        $duree = (int) round((microtime(true) - $t0) * 1000);
+
+        foreach ($resultats as $r) {
+            $this->assertTrue($r['ok'], json_encode($r, JSON_UNESCAPED_UNICODE));
+        }
+        $matricules = array_column($resultats, 'matricule');
+        sort($matricules);
+        $this->assertCount(10, array_unique($matricules), 'Dix matricules distincts : ' . implode(', ', $matricules));
+        $this->assertCount(10, array_unique(array_column($resultats, 'connexion')), 'Dix connexions distinctes.');
+        $this->assertSame($matricules, $this->matriculesEcrits(), 'Les dix lignes existent, chacune avec son matricule.');
+        $this->assertSame(5, $this->fichesDeTest()->count());
+        $this->assertSame(5, $this->certificatsDeTest()->count());
+
+        // Preuve du chevauchement : chacun garde le verrou 100 ms, donc dix
+        // passages l'un après l'autre durent au moins ~1 s et le k-ième attend
+        // ~(k-1) × 100 ms. Sans verrou, la durée et les attentes seraient nulles.
+        $this->assertGreaterThanOrEqual(8 * $tenue, $duree, 'Les dix créations sont passées l\'une après l\'autre.');
+        $this->assertGreaterThanOrEqual(2250, array_sum(array_column($resultats, 'attente_ms')), 'Les processus ont attendu le verrou les uns des autres.');
+
+        foreach ($matricules as $m) {
+            $this->assertGreaterThan($avant, (int) substr($m, 3));
+        }
+        $this->assertGreaterThanOrEqual($avant + 10, $this->compteur());
+    }
+
+    public function test_temoin_l_ancien_mecanisme_donne_deux_fois_le_meme_numero(): void
+    {
+        $this->compteur();
+
+        // Série de test à part, propre à CETTE exécution : elle n'appartient
+        // pas à la série NI (le service et la migration ne la reconnaissent
+        // pas comme un matricule) et ne peut désigner aucune donnée existante.
+        // On le vérifie quand même, en lecture seule, dans les quatre tables.
+        $serie = 'TEMOIN-' . strtoupper(uniqid()) . '-';
+        foreach (MatriculeEtudiantService::COLONNES as $table => $colonne) {
+            $this->assertSame(0, DB::table($table)->where($colonne, 'like', $serie . '%')->count(), "La série de test {$serie} existe déjà dans {$table}.");
+        }
+
+        // Même déroulement que duel() : le premier écrit puis garde sa
+        // transaction ouverte, le second arrive pendant ce temps. Avec l'ANCIEN
+        // mécanisme (plus grand numéro + 1, verrou nommé relâché avant la
+        // validation), la ligne du premier n'est pas encore visible : le second
+        // calcule le même numéro. Ce doublon DOIT apparaître, sinon les tests
+        // ci-dessus ne prouveraient rien.
+        $signal = $this->signal('temoin-' . uniqid());
+        $p1 = $this->lancer(['action' => 'matricule-temoin', 'serie' => $serie, 'emettre' => $signal, 'maintien' => self::MAINTIEN]);
+        $p2 = $this->lancer(['action' => 'matricule-temoin', 'serie' => $serie, 'attendre' => $signal]);
+        $r1 = $this->resultat($p1);
+        $r2 = $this->resultat($p2);
+
+        $this->assertTrue($r1['ok'] && $r2['ok'], json_encode([$r1, $r2], JSON_UNESCAPED_UNICODE));
+        $this->assertNotSame($r1['connexion'], $r2['connexion'], 'Deux connexions distinctes.');
+        $this->assertLessThan(self::ATTENTE, $r2['attente_ms'], 'L\'ancien mécanisme ne fait pas attendre le second.');
+
+        // Les deux certificats sont relus par leur clé primaire.
+        $this->assertNotSame($r1['id'], $r2['id']);
+        $c1 = DB::table('certificat')->where('id', $r1['id'])->first();
+        $c2 = DB::table('certificat')->where('id', $r2['id'])->first();
+        $this->assertNotNull($c1);
+        $this->assertNotNull($c2);
+        $this->assertSame([$r1['reference'], $r2['reference']], [$c1->reference, $c2->reference]);
+        $this->assertStringStartsWith($serie, $c1->matricule);
+        $this->assertSame($c1->matricule, $c2->matricule, 'Ancien mécanisme : le même numéro est donné deux fois — le scénario est probant.');
+        // Rien d'autre que ces deux lignes ne porte la série de test.
+        $this->assertSame([$r1['id'], $r2['id']], DB::table('certificat')->where('matricule', 'like', $serie . '%')->orderBy('id')->pluck('id')->all());
+
+        // Le même déroulement avec le service actuel : deux numéros. (Les deux
+        // lignes du témoin sont retirées par leur clé, depuis le journal.)
+        $this->nettoyerMatricules();
+        $this->assertSame(0, DB::table('certificat')->whereIn('id', [$r1['id'], $r2['id']])->count());
+        [$premier, $second] = $this->duel(
+            ['action' => 'matricule-creer', 'type' => 'certificat'],
+            ['action' => 'matricule-creer', 'type' => 'certificat'],
+        );
+        $this->assertTrue($second['ok'], json_encode($second, JSON_UNESCAPED_UNICODE));
+        $this->assertNotSame($premier['matricule'], $second['matricule']);
     }
 }

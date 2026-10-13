@@ -5,6 +5,7 @@ import api from '../../api/axios'
 import toast from 'react-hot-toast'
 import { useModuleSuggestions } from '../../hooks/useModuleSuggestions'
 import Pagination from '../../components/Pagination'
+import FicheDetail from '../../components/FicheDetail'
 import { IcoSearch, IcoBarChart, IcoExcel, IcoFilter, IcoMoney } from '../../components/icons'
 
 
@@ -102,6 +103,7 @@ export default function EtatPage() {
   const [rows,    setRows]    = useState<EtatRow[]>([])
   const [meta,    setMeta]    = useState<EtatMeta>(EMPTY_META)
   const [loading, setLoading] = useState(false)
+  const [viewing, setViewing] = useState<EtatRow | null>(null)
   const [queryParams, setQueryParams] = useState<Record<string, string>>({})
 
   const fetchEtat = useCallback(async (page: number, perPage: number, params: Record<string, string>) => {
@@ -398,7 +400,7 @@ export default function EtatPage() {
                         </td>
                       </tr>
                     ) : rows.map((r, i) => (
-                      <tr key={r.id_paiement}>
+                      <tr key={r.id_paiement} onClick={() => setViewing(r)} style={{ cursor: 'pointer' }}>
                         <td style={{ color: '#94a3b8', fontSize: 13 }}>
                           {(meta.current_page - 1) * meta.per_page + i + 1}
                         </td>
@@ -428,6 +430,24 @@ export default function EtatPage() {
 
         </div>
       </div>
+
+      {viewing && (
+        <FicheDetail
+          title="Fiche de l'entrée"
+          onClose={() => setViewing(null)}
+          rows={[
+            ['Date', viewing.date_transaction || '—'],
+            ['Matricule', viewing.matricule || '—'],
+            ['Nom', viewing.nom || '—'],
+            ['Prénom', viewing.prenom || '—'],
+            ['Session', viewing.code_session || '—'],
+            ['Montant', `${fmt(viewing.montant)} Ar`],
+            ['Type de paiement', viewing.type_paiement || '—'],
+            ['Lieu de paiement', viewing.lieu_paiement || '—'],
+            ['Éditeur', viewing.editeur?.trim() || '—'],
+          ]}
+        />
+      )}
     </div>
   )
 }

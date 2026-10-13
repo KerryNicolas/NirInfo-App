@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import api from '../../../api/axios'
 import toast from 'react-hot-toast'
 import { toUpper, toTitleCase } from '../../../utils/textFormat'
-import { formatTelephoneMG, isValidTelephoneMG, formatCinMG, isValidCinMG, isValidEmailComFr, isAdult18, invalidFieldStyle } from '../../../utils/validators'
+import { formatTelephoneMG, isValidTelephoneMG, formatCinMG, isValidCinMG, isValidEmailComFr, hasMinAge, AGE_MIN_ETUDIANT, invalidFieldStyle } from '../../../utils/validators'
 import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
 import TableSkeleton from '../../../components/TableSkeleton'
@@ -137,22 +137,18 @@ export default function EtudiantTab({ onInscrire }: EtudiantTabProps) {
       toast.error('Téléphone invalide — 10 chiffres, préfixe 032 à 038 (ex: 034 12 345 67)')
       return
     }
-    // FIX : Date de naissance et CIN sont désormais obligatoires — un
-    // étudiant doit avoir au moins 18 ans et posséder un CIN pour
-    // s'inscrire (exigence métier).
+    // Date de naissance obligatoire : un étudiant doit avoir au moins 15 ans.
+    // Le CIN est facultatif (un mineur n'en a pas) ; s'il est saisi, il
+    // doit être valide.
     if (!form.date_naissance) {
       toast.error('La date de naissance est obligatoire')
       return
     }
-    if (!isAdult18(form.date_naissance)) {
-      toast.error("L'étudiant doit avoir au moins 18 ans")
+    if (!hasMinAge(form.date_naissance, AGE_MIN_ETUDIANT)) {
+      toast.error(`L'étudiant doit avoir au moins ${AGE_MIN_ETUDIANT} ans`)
       return
     }
-    if (!form.numero_cin) {
-      toast.error('Le numéro CIN est obligatoire')
-      return
-    }
-    if (!isValidCinMG(form.numero_cin)) {
+    if (form.numero_cin && !isValidCinMG(form.numero_cin)) {
       toast.error('CIN invalide — 12 chiffres exactement (ex: 101 234 567 890)')
       return
     }
@@ -245,10 +241,10 @@ export default function EtudiantTab({ onInscrire }: EtudiantTabProps) {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Date de naissance <span style={{ color:'#ef4444' }}></span></label>
-                    {/* FIX : obligatoire — l'étudiant doit avoir au moins 18 ans */}
+                    {/* Obligatoire — l'étudiant doit avoir au moins 15 ans */}
                     <input className="form-control" type="date" value={form.date_naissance}
                       onChange={set('date_naissance')}
-                      style={form.date_naissance && !isAdult18(form.date_naissance) ? invalidFieldStyle : undefined}
+                      style={form.date_naissance && !hasMinAge(form.date_naissance, AGE_MIN_ETUDIANT) ? invalidFieldStyle : undefined}
                       required />
                   </div>
                 </div>
@@ -260,11 +256,11 @@ export default function EtudiantTab({ onInscrire }: EtudiantTabProps) {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Numéro CIN <span style={{ color:'#ef4444' }}></span></label>
-                    {/* FIX : obligatoire — formatage automatique "XXX XXX XXX XXX" (12 chiffres) */}
+                    {/* Facultatif — formatage automatique "XXX XXX XXX XXX" (12 chiffres) */}
                     <input className="form-control" value={form.numero_cin}
                       onChange={e => setForm(p => ({ ...p, numero_cin: formatCinMG(e.target.value) }))}
                       style={form.numero_cin && !isValidCinMG(form.numero_cin) ? invalidFieldStyle : undefined}
-                      required placeholder="Ex: 101 234 567 890" maxLength={15} />
+                      placeholder="Ex: 101 234 567 890" maxLength={15} />
                   </div>
                 </div>
                 <div className="form-row">

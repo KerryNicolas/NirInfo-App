@@ -72,6 +72,9 @@ Route::middleware(['auth:sanctum', 'admin.delete'])->group(function () {
     // Lieux de formation et de paiement : liste, création et modification
     // ouvertes comme les horaires ; la suppression suit admin.delete.
     Route::apiResource('lieux', \App\Http\Controllers\LieuController::class)->except(['show']);
+    // Formateurs (ID, nom, prénom) : lecture ouverte comme les sessions,
+    // pour l'autocomplétion du formulaire de session.
+    Route::get('/formateurs', [SessionController::class, 'formateurs']);
     Route::get('/sessions/en-cours', [SessionController::class, 'enCours']);
     Route::apiResource('sessions',   SessionController::class);
 

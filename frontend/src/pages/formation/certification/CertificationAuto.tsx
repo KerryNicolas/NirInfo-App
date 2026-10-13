@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
 import ConfirmDialog from '../../../components/ConfirmDialog'
+import FicheDetail from '../../../components/FicheDetail'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useModuleSuggestions } from '../../../hooks/useModuleSuggestions'
 import { useMatriculeSuggestions } from '../../../hooks/useMatriculeSuggestions'
@@ -13,7 +14,7 @@ import { formatMontantInput, parseMontantInput, isValidMatriculeNI, invalidField
 import CertificatView from './CertificatView'
 import ValiderModal from './ValiderModal'
 import { IcoCertif, IcoPrint, IcoTrash, IcoSearch, IcoAward, IcoClose, IcoEdit, IcoSave } from '../../../components/icons'
-import { isValide, isManuel, isGratuit, prixToInput, fmtMontant, fmtDateCourt } from './types'
+import { isValide, isManuel, isGratuit, suitPrixStandard, prixToInput, fmtMontant, fmtDateCourt } from './types'
 import type { Certification, Compte, ValidationPayload } from './types'
 
 // Onglet « Certification » (mode automatique) : formulaire de génération
@@ -45,6 +46,7 @@ export default function CertificationAuto({ onEditManuel }: { onEditManuel?: (c:
   const certifTable = useTable<Certification>('/certifications', { perPage: 15 })
 
   const [printCertif, setPrintCertif]     = useState<Certification | null>(null)
+  const [viewing, setViewing]             = useState<Certification | null>(null)
   const [validerCertif, setValiderCertif] = useState<Certification | null>(null)
   const [confirmDeleteRef, setConfirmDeleteRef] = useState<string | null>(null)
   const [comptes, setComptes] = useState<Compte[]>([])
@@ -88,7 +90,9 @@ export default function CertificationAuto({ onEditManuel }: { onEditManuel?: (c:
       lieu_paiement: c.lieu_paiement || 'Ampandrana',
       code_session: c.code_session || '',
       // FIX : prixToInput() — « 10000.00 » s'affichait « 1 000 000 ».
-      prix: prixToInput(c.prix),
+      // Champ laissé vide tant que le certificat suit le prix standard :
+      // sinon l'enregistrer figerait ce prix.
+      prix: suitPrixStandard(c) ? '' : prixToInput(c.prix),
     })
     setModuleQuery(c.module_nom || c.code_module || '')
     setSessionQuery(c.code_session || '')
@@ -246,7 +250,10 @@ export default function CertificationAuto({ onEditManuel }: { onEditManuel?: (c:
                 <label className="form-label">Prix certificat (Ar)</label>
                 <input className="form-control" type="text" inputMode="numeric" value={form.prix}
                   onChange={e => setForm(p => ({ ...p, prix: formatMontantInput(e.target.value) }))}
-                  placeholder="Ex: 10 000" />
+                  placeholder="Vide = prix standard" />
+                <p style={{ fontSize:12, color:'#94a3b8', marginTop:4 }}>
+                  Laissez vide pour appliquer le prix standard en vigueur à la validation.
+                </p>
               </div>
             </div>
             <div className="form-row">
@@ -286,7 +293,7 @@ export default function CertificationAuto({ onEditManuel }: { onEditManuel?: (c:
                 {certifTable.data.length === 0
                   ? <tr><td colSpan={10}><div className="empty-state">Aucune certification trouvée</div></td></tr>
                   : certifTable.data.map((c: Certification, idx: number) => (
-                    <tr key={c.reference}>
+                    <tr key={c.reference} onClick={() => setViewing(c)} style={{ cursor:'pointer' }}>
                       <td style={{ color:'#94a3b8', fontSize:13 }}>{(certifTable.meta.current_page-1)*certifTable.meta.per_page+idx+1}</td>
                       <td style={{ fontWeight:600, color:'#2563eb', fontSize:13 }}>{c.reference}</td>
                       <td>
@@ -313,7 +320,7 @@ export default function CertificationAuto({ onEditManuel }: { onEditManuel?: (c:
                           : <span className="badge badge-warning">En attente</span>
                         }
                       </td>
-                      <td><div className="table-actions">
+                      <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                         {canValider && !isValide(c.accept) && (
                           <button className="btn-icon" style={{ color:'#16a34a' }} onClick={() => setValiderCertif(c)} title="Valider"><IcoAward /></button>
                         )}
@@ -353,6 +360,30 @@ export default function CertificationAuto({ onEditManuel }: { onEditManuel?: (c:
         onConfirm={handleDelete}
         onCancel={() => setConfirmDeleteRef(null)}
       />
+      {viewing && (
+        <FicheDetail
+          title="Fiche certificat"
+          onClose={() => setViewing(null)}
+          rows={[
+            ['Référence', viewing.reference],
+            ['Étudiant', viewing.nom_complet?.trim() || `${viewing.nom || ''} ${viewing.prenom || ''}`.trim() || '—'],
+            ['Matricule', viewing.matricule || '—'],
+            ['Date de naissance', viewing.date_naissance ? fmtDateCourt(viewing.date_naissance) : '—'],
+            ['Lieu de naissance', viewing.lieu_naissance || '—'],
+            ['Formation', viewing.module_nom || '—'],
+            ['Session', viewing.code_session || '—'],
+            ['Début session', fmtDateCourt(viewing.debut_session)],
+            ['Fin session', fmtDateCourt(viewing.fin_session)],
+            ['Prix', isGratuit(viewing) ? 'Gratuit' : Number(viewing.prix) > 0 ? `${fmtMontant(viewing.prix)} Ar${suitPrixStandard(viewing) ? ' (prix standard)' : ''}` : '—'],
+            ...(isGratuit(viewing) ? [['Motif de gratuité', viewing.motif_gratuit || '—'] as [string, string]] : []),
+            ['Lieu de paiement', viewing.lieu_paiement || '—'],
+            ['Origine', isManuel(viewing) ? 'Manuel' : 'Normal'],
+            ['Statut', isValide(viewing.accept) ? 'Validé' : 'En attente'],
+            [isValide(viewing.accept) ? 'Date de validation' : 'Date de création', fmtDateCourt(viewing.date)],
+            ['Éditeur', viewing.editeur?.trim() || '—'],
+          ]}
+        />
+      )}
       {printCertif && <CertificatView certif={printCertif} onClose={() => setPrintCertif(null)} />}
       {validerCertif && (
         <ValiderModal

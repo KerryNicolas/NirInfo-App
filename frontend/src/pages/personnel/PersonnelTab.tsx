@@ -5,6 +5,7 @@ import { useTable } from '../../hooks/useTable'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import { useAuth } from '../../contexts/AuthContext'
+import Avatar from '../../assets/avatar.jpg'
 import { IcoEdit, IcoPlus, IcoSearch, IcoCamera, IcoSave, IcoX, IcoExport, IcoTrash } from '../../components/icons'
 import { toUpperName, toTitleCaseWords, formatTelephoneMG, isValidTelephoneMG, formatCinMG, isValidCinMG, isValidEmailComFr, isAdult18, formatMontantInput, parseMontantInput, invalidFieldStyle } from '../../utils/validators'
 
@@ -55,18 +56,27 @@ function DetailModal({ p, voirSalaire, onClose }: { p: Personnel; voirSalaire: b
   ]
   return (
     <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }} onClick={onClose}>
-      <div style={{ width:460, background:'white', borderRadius:12, padding:24 }} onClick={ev => ev.stopPropagation()}>
+      <div style={{ width:560, background:'white', borderRadius:12, padding:24 }} onClick={ev => ev.stopPropagation()}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
           <span style={{ fontWeight:700, fontSize:16 }}>Détail du personnel</span>
           <button onClick={onClose} className="btn-icon"><IcoX /></button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:14 }}>
-          {rows.map(([label, val]) => (
-            <div key={label} style={{ display:'contents' }}>
-              <span style={{ color:'#64748b' }}>{label} :</span>
-              <span style={{ fontWeight:500 }}>{val}</span>
-            </div>
-          ))}
+        {/* Photo à gauche, comme la fiche étudiant. */}
+        <div style={{ display:'flex', gap:20 }}>
+          <img
+            src={p.photo_pers ? storageUrl(p.photo_pers) : Avatar}
+            alt=""
+            onError={(ev) => { (ev.target as HTMLImageElement).src = Avatar }}
+            style={{ width:110, height:130, objectFit:'cover', borderRadius:8, border:'1px solid #e2e8f0', flexShrink:0 }}
+          />
+          <div style={{ flex:1, display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px', fontSize:14, alignContent:'start' }}>
+            {rows.map(([label, val]) => (
+              <div key={label} style={{ display:'contents' }}>
+                <span style={{ color:'#64748b' }}>{label} :</span>
+                <span style={{ fontWeight:500 }}>{val}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

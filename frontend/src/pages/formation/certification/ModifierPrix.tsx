@@ -85,7 +85,7 @@ export default function ModifierPrix() {
           </form>
           {!loading && (
             <div style={{ fontSize:13, color:'#94a3b8', marginTop:10 }}>
-              Prix actuellement appliqué par défaut aux nouvelles certifications : <b>{fmtMontant(prixActuel)} Ar</b>
+              Prix actuellement appliqué aux nouvelles certifications et à celles encore en attente sans prix particulier : <b>{fmtMontant(prixActuel)} Ar</b>. Les certificats déjà validés gardent leur prix.
             </div>
           )}
         </div>

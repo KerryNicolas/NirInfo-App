@@ -105,6 +105,20 @@ class CertificationController extends BaseApiController
         return DB::table('prix_certificat')->orderBy('id_prix_certificat', 'DESC')->first()?->prix;
     }
 
+    // Le même, en SQL, pour la liste.
+    private const SQL_PRIX_STANDARD = '(SELECT pc.prix FROM prix_certificat pc ORDER BY pc.id_prix_certificat DESC LIMIT 1)';
+
+    // Prix d'un certificat EN ATTENTE :
+    //  - colonne `prix` vide  → il suit le prix standard en vigueur, y
+    //    compris si « Modifier prix » change avant sa validation ;
+    //  - colonne `prix` remplie → prix particulier saisi à la main, conservé.
+    // À la validation, le prix retenu est écrit dans le certificat et ne
+    // change plus : « Modifier prix » ne touche jamais un certificat validé.
+    private function prixSaisi(Request $request): ?float
+    {
+        return (float) $request->prix > 0 ? (float) $request->prix : null;
+    }
+
     public function index(Request $request)
     {
         try {
@@ -135,7 +149,10 @@ class CertificationController extends BaseApiController
                     'c.fin_session',
                     'c.date',
                     'c.accept',
-                    'c.prix',
+                    // En attente sans prix particulier : prix standard du moment.
+                    DB::raw('IF(c.accept = 0 AND c.prix IS NULL, ' . self::SQL_PRIX_STANDARD . ', c.prix) as prix'),
+                    // 0 = le certificat suit le prix standard (voir prixSaisi()).
+                    DB::raw('IF(c.accept = 0 AND c.prix IS NULL, 0, 1) as prix_particulier'),
                     'c.lieu_paiement',
                     'c.code_session',
                     DB::raw("CONCAT(IFNULL(s.nom_s,''),' ',IFNULL(s.prenom_s,'')) as editeur")
@@ -171,8 +188,9 @@ class CertificationController extends BaseApiController
 
         $reference = $this->genererReference();
 
-        // Prix par défaut = dernier prix standard défini, si aucun prix fourni
-        $prix = $request->prix ?: $this->prixStandard();
+        // Aucun prix fourni : le certificat suit le prix standard jusqu'à
+        // sa validation (colonne laissée vide, voir prixSaisi()).
+        $prix = $this->prixSaisi($request);
 
         DB::table('certificat')->insert([
             'reference'     => $reference,
@@ -202,7 +220,9 @@ class CertificationController extends BaseApiController
 
         $saisi     = $this->matriculeSaisi($request, null);
         $reference = $this->genererReference();
-        $prix      = $this->prixStandard();
+        // Pas de prix à la saisie : le certificat suit le prix standard
+        // jusqu'à sa validation (voir prixSaisi()).
+        $prix      = null;
 
         // Sans matricule saisi, le certificat reçoit le prochain numéro de la
         // série NI (celle des étudiants) : la liste affiche toujours un vrai
@@ -255,7 +275,8 @@ class CertificationController extends BaseApiController
                 'debut_session'  => $request->date_debut,
                 'fin_session'    => $request->date_fin,
                 'accept'         => 0,
-                'prix'           => $prix,
+                'prix'           => $this->prixStandard(),
+                'prix_particulier' => 0,
                 'lieu_paiement'  => $request->lieu_paiement ?? null,
                 'code_session'   => null,
                 'origine'        => 'manuel',
@@ -292,22 +313,29 @@ class CertificationController extends BaseApiController
             // Champ vidé : le certificat garde son matricule. S'il n'en avait
             // pas encore (ancienne saisie), il en reçoit un maintenant.
             $matricule = $this->matriculeSaisi($request, $c) ?? (trim((string) $c->matricule) !== '' ? $c->matricule : null);
-            if ($matricule === null) {
-                $matricule = app(MatriculeEtudiantService::class)->attribuer(
-                    fn (string $m) => DB::table('certificat')->where('id', $c->id)->update(['matricule' => $m])
-                );
-            }
 
-            DB::table('certificat')->where('id', $c->id)->update([
-                'nom_manuel'            => $request->nom_complet,
-                'matricule'             => $matricule,
-                'nom_formation'         => $request->nom_formation,
-                'date_naissance_manuel' => $request->date_naissance ?? null,
-                'lieu_naissance_manuel' => $request->lieu_naissance ?? null,
-                'debut_session'         => $request->date_debut,
-                'fin_session'           => $request->date_fin,
-                'lieu_paiement'         => $request->lieu_paiement ?? $c->lieu_paiement,
-            ]);
+            // Une seule transaction pour l'attribution du matricule et la
+            // correction du certificat : si l'une échoue, rien n'est gardé
+            // (ni matricule attribué à moitié, ni numéro consommé pour rien).
+            DB::transaction(function () use ($request, $c, $matricule) {
+                if ($matricule === null) {
+                    $matricule = app(MatriculeEtudiantService::class)->attribuer(
+                        fn (string $m) => DB::table('certificat')->where('id', $c->id)->update(['matricule' => $m])
+                    );
+                }
+
+                DB::table('certificat')->where('id', $c->id)->update([
+                    'nom_manuel'            => $request->nom_complet,
+                    'matricule'             => $matricule,
+                    'nom_formation'         => $request->nom_formation,
+                    'date_naissance_manuel' => $request->date_naissance ?? null,
+                    'lieu_naissance_manuel' => $request->lieu_naissance ?? null,
+                    'debut_session'         => $request->date_debut,
+                    'fin_session'           => $request->date_fin,
+                    'lieu_paiement'         => $request->lieu_paiement ?? $c->lieu_paiement,
+                ]);
+            });
+
             return $this->ok('Certificat mis à jour avec succès');
         }
 
@@ -321,7 +349,13 @@ class CertificationController extends BaseApiController
             $session = DB::table('session')->where('code_session', $request->code_session)->first();
         }
 
-        $nouveauPrix = $request->prix ?? $c->prix;
+        // Certificat en attente : un prix vidé (ou 0) le remet au prix
+        // standard. Validé : son prix ne redevient jamais vide.
+        if ((int) $c->accept !== 1 && $request->has('prix')) {
+            $nouveauPrix = $this->prixSaisi($request);
+        } else {
+            $nouveauPrix = $request->prix ?? $c->prix;
+        }
 
         $debut = $request->date_debut ?? ($session?->debut_session ?? $c->debut_session);
         $fin   = $request->date_fin   ?? ($session?->fin_session   ?? $c->fin_session);
@@ -424,7 +458,9 @@ class CertificationController extends BaseApiController
         }
 
         // Sinon le paiement est obligatoire, normal ou manuel.
-        $prixFinal = $request->prix ?? $c->prix ?? 0;
+        // Prix : celui de la fenêtre de validation, sinon le prix particulier
+        // du certificat, sinon le prix standard en vigueur.
+        $prixFinal = $request->prix ?? $c->prix ?? $this->prixStandard() ?? 0;
         if ((float) $prixFinal <= 0) {
             return $this->err('Le paiement est obligatoire : le prix doit être supérieur à 0.', 422);
         }

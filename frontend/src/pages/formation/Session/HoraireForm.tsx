@@ -5,25 +5,11 @@ import { useTable } from '../../../hooks/useTable'
 import Pagination from '../../../components/Pagination'
 import ConfirmDialog from '../../../components/ConfirmDialog'
 import { useAuth } from '../../../contexts/AuthContext'
-import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX, IcoInfo } from '../../../components/icons'
+import FicheDetail from '../../../components/FicheDetail'
+import { IcoPlus, IcoEdit, IcoTrash, IcoSearch, IcoSave, IcoX } from '../../../components/icons'
 
 interface Horaire { code_horaire: string; designation: string; horaire: string; remarque: string; editeur: string }
 const EMPTY = { code_horaire: '', designation: '', horaire: '', remarque: '' }
-
-// ── Petit popover léger — une seule info (éditeur), pas besoin d'un modal complet ──
-function EditeurPopover({ editeur, onClose }: { editeur: string; onClose: () => void }) {
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }} onClick={onClose}>
-      <div style={{ width:280, background:'white', borderRadius:12, padding:20 }} onClick={ev => ev.stopPropagation()}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-          <span style={{ fontWeight:700, fontSize:14 }}>Éditeur</span>
-          <button onClick={onClose} className="btn-icon"><IcoX /></button>
-        </div>
-        <div style={{ fontSize:14, color:'#334155' }}>{editeur?.trim() || 'Non renseigné'}</div>
-      </div>
-    </div>
-  )
-}
 
 export default function HoraireForm() {
   const { isAdmin } = useAuth()
@@ -31,7 +17,7 @@ export default function HoraireForm() {
   const [editing, setEditing] = useState<Horaire | null>(null)
   const [form,    setForm]    = useState(EMPTY)
   const [saving,  setSaving]  = useState(false)
-  const [showEditeur, setShowEditeur] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<Horaire | null>(null)
   const [confirmDeleteCode, setConfirmDeleteCode] = useState<string | null>(null)
 
   const reset = () => { setForm(EMPTY); setEditing(null) }
@@ -115,20 +101,19 @@ export default function HoraireForm() {
         <div className="table-wrapper">
           {table.loading ? <div className="loading-center"><div className="spinner" /> Chargement…</div> : (
             <table>
-              {/* Colonne Éditeur retirée — accessible via le bouton info dans Action */}
+              {/* Colonne Éditeur retirée — désormais dans la fiche détail (clic sur la ligne) */}
               <thead><tr><th>#</th><th>Code</th><th>Désignation</th><th>Description</th><th>Remarque</th><th>Action</th></tr></thead>
               <tbody>
                 {table.data.length === 0 ? (
                   <tr><td colSpan={6}><div className="empty-state">{table.search ? `Aucun résultat pour « ${table.search} »` : 'Aucun horaire trouvé'}</div></td></tr>
                 ) : table.data.map((h, idx) => (
-                  <tr key={h.code_horaire}>
+                  <tr key={h.code_horaire} onClick={() => setViewing(h)} style={{ cursor:'pointer' }}>
                     <td style={{ color:'#94a3b8', fontSize:13 }}>{(table.meta.current_page-1)*table.meta.per_page+idx+1}</td>
                     <td><span className="badge badge-info">{h.code_horaire}</span></td>
                     <td style={{ fontWeight:600 }}>{h.designation}</td>
                     <td style={{ fontSize:13, color:'#64748b' }}>{h.horaire || '—'}</td>
                     <td style={{ fontSize:13 }}>{h.remarque || '—'}</td>
-                    <td><div className="table-actions">
-                      <button className="btn-icon" title="Éditeur" onClick={() => setShowEditeur(h.editeur)}><IcoInfo /></button>
+                    <td onClick={ev => ev.stopPropagation()}><div className="table-actions">
                       <button className="btn-icon edit" onClick={() => handleEdit(h)}><IcoEdit /></button>
                       {isAdmin() && <button className="btn-icon delete" onClick={() => setConfirmDeleteCode(h.code_horaire)}><IcoTrash /></button>}
                     </div></td>
@@ -141,7 +126,19 @@ export default function HoraireForm() {
         {!table.loading && table.meta.total > 0 && <Pagination meta={table.meta} onPage={table.setPage} onPerPage={table.setPerPage} />}
       </div>
 
-      {showEditeur !== null && <EditeurPopover editeur={showEditeur} onClose={() => setShowEditeur(null)} />}
+      {viewing && (
+        <FicheDetail
+          title="Fiche horaire"
+          onClose={() => setViewing(null)}
+          rows={[
+            ['Code', viewing.code_horaire],
+            ['Désignation', viewing.designation || '—'],
+            ['Description', viewing.horaire || '—'],
+            ['Remarque', viewing.remarque || '—'],
+            ['Éditeur', viewing.editeur?.trim() || '—'],
+          ]}
+        />
+      )}
 
       <ConfirmDialog
         open={!!confirmDeleteCode}

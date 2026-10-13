@@ -26,6 +26,7 @@ class SessionController extends BaseApiController
                 's.frais_module   as frais_formation',
                 's.code_module',
                 's.code_horaire',
+                'f.id_formateur',
                 'm.nom_module          as module_nom',
                 'h.designation_horaire as horaire_designation',
                 'h.description_horaire as horaire_description',
@@ -80,6 +81,37 @@ class SessionController extends BaseApiController
         }
     }
 
+    // Liste des formateurs pour l'autocomplétion du formulaire de session :
+    // uniquement l'identifiant, le matricule, le nom et le prénom (jamais
+    // les identifiants de connexion de la table formateur).
+    public function formateurs()
+    {
+        return response()->json(
+            DB::table('formateur as f')
+                ->leftJoin('personnel as p', 'f.matricule_pers', '=', 'p.matricule_pers')
+                ->select(
+                    'f.id_formateur as id',
+                    DB::raw("IFNULL(f.matricule_f,'') as matricule"),
+                    DB::raw("IFNULL(p.nom_pers,'')    as nom"),
+                    DB::raw("IFNULL(p.prenom_pers,'') as prenom")
+                )
+                ->orderBy('p.nom_pers')->orderBy('p.prenom_pers')
+                ->get()
+        );
+    }
+
+    private const REGLE_FORMATEUR    = 'nullable|integer|exists:formateur,id_formateur';
+    private const MESSAGES_FORMATEUR = [
+        'id_formateur.integer' => "Ce formateur n'existe pas.",
+        'id_formateur.exists'  => "Ce formateur n'existe pas.",
+    ];
+
+    // La session garde le matricule du formateur (colonne matricule_f).
+    private function matriculeFormateur($idFormateur): ?string
+    {
+        return DB::table('formateur')->where('id_formateur', $idFormateur)->value('matricule_f');
+    }
+
     public function store(Request $request)
     {
         $request->validate([
@@ -88,13 +120,10 @@ class SessionController extends BaseApiController
             'code_horaire'    => 'required|string|exists:horaire,code_horaire',
             'code_module'     => 'required|string|exists:module,code_module',
             'frais_formation' => 'required|numeric|min:0',
-        ]);
+            'id_formateur'    => self::REGLE_FORMATEUR,
+        ], self::MESSAGES_FORMATEUR);
         $code = $request->code_module.' du '.$request->date_debut.' '.$request->code_horaire;
-        $mf   = null;
-        if ($request->filled('id_formateur')) {
-            $f  = DB::table('formateur')->where('id_formateur',$request->id_formateur)->first();
-            $mf = $f?->matricule_f;
-        }
+        $mf   = $request->filled('id_formateur') ? $this->matriculeFormateur($request->id_formateur) : null;
         DB::table('session')->insert([
             'code_session'  => $code,
             'debut_session' => $request->date_debut,
@@ -126,7 +155,8 @@ class SessionController extends BaseApiController
             'code_module'     => 'sometimes|required|string|exists:module,code_module',
             'frais_formation' => 'sometimes|required|numeric|min:0',
             'lieu'            => 'sometimes|nullable|string|max:100',
-        ]);
+            'id_formateur'    => self::REGLE_FORMATEUR,
+        ], self::MESSAGES_FORMATEUR);
 
         $data = array_filter([
             'debut_session' => $request->date_debut,
@@ -137,6 +167,12 @@ class SessionController extends BaseApiController
             'code_module'   => $request->code_module,
             'lieu'          => $request->has('lieu') ? $request->lieu : null,
         ], fn($v) => $v !== null);
+
+        // Formateur : champ absent de la requête = inchangé ; champ envoyé
+        // vide = la session n'a plus de formateur.
+        if ($request->has('id_formateur')) {
+            $data['matricule_f'] = $request->filled('id_formateur') ? $this->matriculeFormateur($request->id_formateur) : null;
+        }
 
         DB::table('session')->where('code_session',$id)->update($data);
         return $this->ok('Session mise à jour avec succès');
