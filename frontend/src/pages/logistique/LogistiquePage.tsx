@@ -343,7 +343,7 @@ export default function LogistiquePage() {
       {/* ── CONTENU ── */}
       <div className="main-content">
         {/* ── Barre du haut avec Achat/Charge — inchangée ── */}
-        <div style={{ background:'white', borderBottom:'1px solid #e2e8f0', padding:'14px 24px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 1px 3px rgba(0,0,0,0.06)', position:'sticky', top:0, zIndex:30 }}>
+        <div className="barre-page" style={{ background:'white', borderBottom:'1px solid #e2e8f0', padding:'14px 24px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 1px 3px rgba(0,0,0,0.06)', position:'sticky', top:0, zIndex:30 }}>
           <span style={{ fontWeight:700, fontSize:15, color:'#0f172a' }}>Logistique</span>
           <div style={{ width:1, height:20, background:'#e2e8f0' }} />
           <div style={{ display:'flex', gap:4, background:'#f8fafc', borderRadius:11, padding:4, border:'1px solid #e2e8f0' }}>

@@ -40,7 +40,7 @@ export default function MontantPercu() {
           </button>
         </div>
         {data ? (
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+          <div className="grille-2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
             <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:12, padding:24, textAlign:'center' }}>
               <div style={{ width:48, height:48, borderRadius:'50%', background:'#dcfce7', color:'#16a34a', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 12px' }}><IcoAward /></div>
               <p style={{ fontSize:13, color:'#64748b', marginBottom:6 }}>Certificats délivrés</p>

@@ -103,7 +103,7 @@ export default function ProfilePage() {
 
   return (
     // FIX : corps de la page décalé de 50px vers le bas (marginTop)
-    <div style={{ maxWidth: 760, margin: '0 auto', marginTop: 50 }}>
+    <div className="profil-page" style={{ maxWidth: 760, margin: '0 auto', marginTop: 50 }}>
 
       {/* FIX : bouton retour, cohérent avec la flèche du menu latéral */}
       <button
@@ -120,7 +120,7 @@ export default function ProfilePage() {
 
       {/* ── En-tête profil ── */}
       <div className="card" style={{ marginBottom: 20, padding: '24px 28px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+        <div className="profil-entete" style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <Avatar name={user?.name} photoUrl={user?.photo_url} size={68} />
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
@@ -164,7 +164,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div className="grille-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
         {/* ── Informations personnelles ── */}
         <div className="card">

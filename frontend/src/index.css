@@ -1038,3 +1038,100 @@ tbody td.td-wrap {
 .btn-modern:hover {
   background: #0e7490;
 }
+
+/* ════════════════════════════════════════
+   RESPONSIVE — téléphone et tablette
+   Règles de présentation uniquement : aucune donnée, colonne ou action
+   n'est masquée. Les tableaux gardent leur défilement horizontal.
+
+   Plusieurs écrans posent leur mise en page en style « inline », sans
+   classe. Tant qu'ils n'en ont pas, ils sont visés ici par leur attribut
+   style ([style*="…"]) : le navigateur écrit toujours ces valeurs de la
+   même façon (« inset: 0px », « repeat(4, 1fr) »). Si un écran change de
+   mise en page, la règle cesse simplement de s'appliquer.
+════════════════════════════════════════ */
+
+/* ── Fenêtres (fiches de détail, confirmations) : un fond fixe plein écran
+   et sa boîte. La boîte ne dépasse plus jamais de l'écran, en largeur comme
+   en hauteur ; son contenu défile si besoin. L'aperçu du certificat garde
+   sa propre mise à l'échelle. ── */
+div[style*="position: fixed"][style*="inset: 0px"] > div:not(.no-print):not(#certificat-print) {
+  max-width: 100%;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+div[style*="position: fixed"][style*="inset: 0px"] [style*="grid-template-columns: auto 1fr"] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  /* Cartes de chiffres de l'État : 4 colonnes -> 2. */
+  .main-content [style*="repeat(4, 1fr)"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+
+@media (max-width: 768px) {
+  /* Le bouton du menu (fixé en haut à gauche) ne recouvre plus le titre. */
+  .top-bar,
+  .barre-page { padding-left: 60px !important; padding-right: 12px !important; }
+  .barre-page { flex-wrap: wrap; row-gap: 8px; }
+
+  .page-body { padding: 16px 12px; }
+  .profil-page { margin-top: 20px !important; padding: 0 12px 24px; }
+}
+
+@media (max-width: 640px) {
+  .grid-2   { grid-template-columns: 1fr; }
+  .grille-2 { grid-template-columns: 1fr !important; }
+
+  /* Formulaire Étudiant uniquement (photo à droite) : la photo passe
+     au-dessus, les champs reprennent toute la largeur. */
+  .card-body form > div[style*="display: flex"][style*="gap: 24px"] { flex-direction: column-reverse; }
+  .card-body form > div[style*="display: flex"][style*="gap: 24px"] > :last-child { align-self: center; }
+
+  /* Fiche avec photo : les informations passent sous la photo. */
+  div[style*="position: fixed"][style*="inset: 0px"] > div > div[style*="display: flex"] { flex-wrap: wrap; }
+  div[style*="position: fixed"][style*="inset: 0px"] [style*="grid-template-columns: auto 1fr"] { flex: 1 1 200px !important; }
+
+  /* En-tête du profil : le bouton et le matricule passent à la ligne. */
+  .profil-entete { flex-wrap: wrap; }
+  .profil-entete > * { margin-left: 0 !important; text-align: left !important; }
+
+  /* Recherche : toute la largeur disponible de l'en-tête de liste. */
+  .card-header .search-bar { flex: 1 1 200px; width: auto; }
+  .card-header { padding: 8px 14px; }
+  .card-body   { padding: 14px; }
+}
+
+@media (max-width: 480px) {
+  /* Marges de page : 24px -> 12px, pour rendre la largeur au contenu. */
+  .main-content > div[style*="padding: 24px"] { padding: 14px 12px !important; }
+  div[style*="position: fixed"][style*="inset: 0px"] { padding-left: 12px !important; padding-right: 12px !important; }
+
+  .stat-card { padding: 12px; gap: 10px; }
+  .stat-info { min-width: 0; }
+  .stat-info .stat-value { font-size: 18px; }
+  .stat-info .stat-label { overflow-wrap: anywhere; }
+
+  /* Menu principal : le nom reste dans la fenêtre Paramètres (avatar). */
+  .dash-topbar { padding: 0 12px; }
+  .dash-topbar-logo { flex-shrink: 0; width: 96px; }
+  .dash-topbar-greeting { display: none; }
+
+  .auth-container { padding: 20px 20px 25px; }
+}
+
+/* ── Écrans tactiles (téléphone, tablette) : zones de toucher d'au moins
+   40px, et champs en 16px — en dessous, iOS zoome à chaque saisie. ── */
+@media (pointer: coarse) {
+  .btn, .tab-btn, .form-control, .search-bar,
+  .dash-btn-logout, .dash-btn-logout-sm, .dash-btn-settings,
+  .main-content select, .main-content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]) { min-height: 40px; }
+  .btn-icon { min-width: 40px; min-height: 40px; }
+  /* Autres boutons des pages (pagination, filtres, onglets Achat/Charge). */
+  .main-content button { min-height: 36px; }
+  .search-bar input { min-height: 0 !important; }
+  .auth-eye-btn { padding: 12px; right: 2px; }
+
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px !important; }
+}
